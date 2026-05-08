@@ -153,9 +153,7 @@ const initSidebar = () => {
 // ==================== 视频播放弹窗 ====================
 const initVideoModal = () => {
     document.getElementById('btn-close-video').addEventListener('click', closeVideoModal);
-    document.getElementById('video-modal').addEventListener('click', (e) => {
-        if (e.target === e.currentTarget) closeVideoModal();
-    });
+    // 不允许点击弹窗外区域关闭，只能通过关闭按钮退出
 };
 
 const openVideoModal = (item, videoInfo) => {
@@ -689,6 +687,31 @@ const renderNav = () => {
             }
 
             section.appendChild(videoGrid);
+
+            // 视频分类拖拽排序
+            if (isAdmin && typeof Sortable !== 'undefined' && cat.id !== 'VIRTUAL_FREQ') {
+                new Sortable(videoGrid, {
+                    animation: 150,
+                    ghostClass: 'sortable-ghost',
+                    filter: '.card-add-new',
+                    onMove: (evt) => {
+                        // 不允许拖到"新增"卡片位置
+                        if (evt.related && evt.related.style && evt.related.style.borderStyle === 'dashed') return false;
+                    },
+                    onEnd: () => {
+                        const newIdOrder = Array.from(videoGrid.querySelectorAll('.video-card[data-id]')).map(el => el.getAttribute('data-id'));
+                        const currentCatItems = appData.items.filter(i => i.catId === cat.id);
+                        const sortedCurrentItems = newIdOrder.map(id => currentCatItems.find(i => i.id === id));
+                        let newGlobalItems = [];
+                        appData.categories.forEach(c => {
+                            if (c.id === cat.id) newGlobalItems.push(...sortedCurrentItems);
+                            else newGlobalItems.push(...appData.items.filter(i => i.catId === c.id));
+                        });
+                        appData.items = newGlobalItems;
+                        saveAll(true);
+                    }
+                });
+            }
         } else {
             // 普通网站分类：使用原有网格
             const grid = document.createElement('div');

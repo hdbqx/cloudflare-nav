@@ -984,6 +984,24 @@ input[type="radio"] {
     border-color: var(--primary);
 }
 
+/* 视频卡片拖拽排序样式 */
+.video-card.sortable-ghost {
+    opacity: 0.4;
+    background: var(--primary);
+}
+
+.video-card.sortable-drag {
+    opacity: 0.9;
+    transform: rotate(2deg) scale(1.03);
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.5), 0 0 20px rgba(57, 157, 255, 0.4);
+    z-index: 1000;
+}
+
+.video-card.drag-over {
+    transform: translateY(5px);
+    border-color: var(--primary);
+}
+
 .cat-item-row.sortable-ghost {
     background: var(--primary) !important;
     opacity: 0.5;
