@@ -1,52 +1,88 @@
 /**
  * ==========================================
- * app.js - 核心前端逻辑（升级版 v4）
+ * app.js - 核心前端逻辑（升级版 v5）
  * CloudNav 个人导航页主程序
- * 支持：默认样式（Style 0）与缤纷模式（Style 2）
- * 增强：批量操作、主题切换、内联编辑、Emoji智能推荐
+ * 支持：左侧导航、连续滚动、视频导航、Monaco Editor
+ * Style 0: 经典图标网格
+ * Style 2: 缤纷模式
  * ==========================================
  */
 
 // ==================== 全局变量定义 ====================
-/** @type {Object} 应用数据对象 */
 let appData = { settings: { cardWidth: 85 }, categories: [], items: [] };
-
-/** @type {string} 当前激活的分类ID */
 let activeCatId = '';
-
-/** @type {string} 系统Token（管理员凭证） */
 let sysToken = localStorage.getItem('nav_token') || '';
-
-/** @type {boolean} 是否为管理员模式 */
 let isAdmin = false;
-
-/** @type {string} 当前编辑类型（items/categories） */
 let editingType = 'items';
-
-/** @type {string|null} 当前编辑的ID */
 let editingId = null;
-
-/** @type {number} Toast定时器 */
 let toastTimer = null;
+let currentViewStyle = parseInt(localStorage.getItem('nav_view_style') || '0');
+let batchSelectMode = false;
+let selectedCardIds = new Set();
+let themeMode = localStorage.getItem('nav_theme_mode') || 'auto';
+let simpleMode = localStorage.getItem('nav_simple_mode') === 'true';
+let monacoEditor = null;
+
+// ==================== 视频平台检测 ====================
 
 /**
- * 当前展示样式
- * 0 = 默认图标网格（原版）
- * 2 = 缤纷模式（列表详情 + 用户自定义网格背景色）
+ * 检测URL是否为视频平台链接
+ * @returns {{ type: 'bilibili'|'youtube', videoId: string, bvid?: string, aid?: string } | null}
  */
-let currentViewStyle = parseInt(localStorage.getItem('nav_view_style') || '0');
+const detectVideoPlatform = (url) => {
+    if (!url || !url.startsWith('http')) return null;
+    try {
+        const urlObj = new URL(url);
+        // Bilibili 检测
+        if (urlObj.hostname.includes('bilibili.com')) {
+            const bvidMatch = urlObj.pathname.match(/\/video\/(BV[a-zA-Z0-9]+)/);
+            if (bvidMatch) return { type: 'bilibili', videoId: bvidMatch[1], bvid: bvidMatch[1] };
+            const avidMatch = urlObj.pathname.match(/\/video\/av(\d+)/);
+            if (avidMatch) return { type: 'bilibili', videoId: 'av' + avidMatch[1], aid: avidMatch[1] };
+        }
+        // YouTube 检测
+        if (urlObj.hostname.includes('youtube.com') || urlObj.hostname === 'youtu.be') {
+            let videoId = '';
+            if (urlObj.hostname === 'youtu.be') {
+                videoId = urlObj.pathname.slice(1);
+            } else if (urlObj.pathname.startsWith('/watch')) {
+                videoId = urlObj.searchParams.get('v');
+            } else if (urlObj.pathname.startsWith('/shorts/')) {
+                videoId = urlObj.pathname.split('/')[2];
+            } else if (urlObj.pathname.startsWith('/embed/')) {
+                videoId = urlObj.pathname.split('/')[2];
+            }
+            if (videoId) return { type: 'youtube', videoId };
+        }
+    } catch (e) { }
+    return null;
+};
 
-/** 批量选择模式状态 */
-let batchSelectMode = false;
+/**
+ * 生成视频嵌入 iframe URL
+ */
+const getVideoEmbedUrl = (videoInfo) => {
+    if (!videoInfo) return '';
+    if (videoInfo.type === 'bilibili') {
+        if (videoInfo.bvid) {
+            return `//player.bilibili.com/player.html?bvid=${videoInfo.bvid}&autoplay=1&high_quality=1`;
+        }
+        if (videoInfo.aid) {
+            return `//player.bilibili.com/player.html?aid=${videoInfo.aid}&autoplay=1&high_quality=1`;
+        }
+    }
+    if (videoInfo.type === 'youtube') {
+        return `https://www.youtube.com/embed/${videoInfo.videoId}?autoplay=1`;
+    }
+    return '';
+};
 
-/** 已选择的卡片ID集合 */
-let selectedCardIds = new Set();
-
-/** 当前主题模式: 'auto' | 'light' | 'dark' */
-let themeMode = localStorage.getItem('nav_theme_mode') || 'auto';
-
-/** 是否启用简约模式（无模糊） */
-let simpleMode = localStorage.getItem('nav_simple_mode') === 'true';
+/**
+ * 判断分类是否为视频分类（名称包含"视频"或图标为特定emoji）
+ */
+const isVideoCategory = (cat) => {
+    return cat.name.includes('视频') || cat.icon === '🎬' || cat.icon === '📺' || cat.icon === '🎥' || cat._isVideo;
+};
 
 // ==================== 安全与工具函数 ====================
 const hashPassword = async (password) => {
@@ -58,7 +94,7 @@ const hashPassword = async (password) => {
 
 // ==================== 初始化入口 ====================
 document.addEventListener('DOMContentLoaded', () => {
-    // 注册 Service Worker（PWA 支持）
+    // 注册 Service Worker
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('/ServiceWorker.js')
@@ -66,13 +102,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 初始化主题模式
     initThemeMode();
-
-    // 初始化简约模式
     initSimpleMode();
+    initSidebar();
 
-    // 全局监听卡片点击，统计访问频次
+    // 全局监听卡片点击
     document.getElementById('grid-container').addEventListener('click', (e) => {
         const card = e.target.closest('.card');
         const link = e.target.closest('a');
@@ -84,16 +118,142 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // 初始化样式切换按钮
     initStyleSwitcher();
-
-    // 初始化应用
+    initVideoModal();
+    initMonacoModal();
     init();
 });
 
-// ==================== 样式切换 ====================
+// ==================== 侧边栏初始化 ====================
+const initSidebar = () => {
+    const toggle = document.getElementById('sidebar-toggle');
+    const overlay = document.getElementById('sidebar-overlay');
+    const sidebar = document.getElementById('sidebar');
 
-/** 初始化样式切换按钮 */
+    toggle.addEventListener('click', () => {
+        sidebar.classList.toggle('open');
+        overlay.classList.toggle('visible');
+    });
+
+    overlay.addEventListener('click', () => {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('visible');
+    });
+
+    // 点击侧边栏导航项后关闭（移动端）
+    document.getElementById('sidebar-nav').addEventListener('click', (e) => {
+        const item = e.target.closest('.sidebar-nav-item');
+        if (item && window.innerWidth <= 768) {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('visible');
+        }
+    });
+};
+
+// ==================== 视频播放弹窗 ====================
+const initVideoModal = () => {
+    document.getElementById('btn-close-video').addEventListener('click', closeVideoModal);
+    document.getElementById('video-modal').addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) closeVideoModal();
+    });
+};
+
+const openVideoModal = (item, videoInfo) => {
+    const iframe = document.getElementById('video-iframe');
+    iframe.src = getVideoEmbedUrl(videoInfo);
+    document.getElementById('video-title').textContent = item.title;
+    document.getElementById('video-desc').textContent = item.desc || '';
+    const extLink = document.getElementById('video-link');
+    extLink.href = item.url;
+    extLink.style.display = item.url ? 'inline-flex' : 'none';
+    document.getElementById('video-modal').style.display = 'flex';
+};
+
+const closeVideoModal = () => {
+    const iframe = document.getElementById('video-iframe');
+    iframe.src = '';
+    document.getElementById('video-modal').style.display = 'none';
+};
+
+// ==================== Monaco Editor 弹窗 ====================
+const initMonacoModal = () => {
+    document.getElementById('btn-close-monaco').addEventListener('click', closeMonacoModal);
+    document.getElementById('monaco-modal').addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) closeMonacoModal();
+    });
+    document.getElementById('btn-monaco-format').addEventListener('click', () => {
+        if (monacoEditor) {
+            monacoEditor.getAction('editor.action.formatDocument').run();
+        }
+    });
+    document.getElementById('btn-monaco-save').addEventListener('click', saveMonacoData);
+};
+
+const openMonacoEditor = () => {
+    document.getElementById('monaco-modal').style.display = 'flex';
+
+    if (monacoEditor) {
+        monacoEditor.setValue(JSON.stringify(getCleanAppData(), null, 2));
+        return;
+    }
+
+    require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
+    require(['vs/editor/editor.main'], () => {
+        monacoEditor = monaco.editor.create(document.getElementById('monaco-container'), {
+            value: JSON.stringify(getCleanAppData(), null, 2),
+            language: 'json',
+            theme: 'vs-dark',
+            automaticLayout: true,
+            minimap: { enabled: true },
+            fontSize: 14,
+            lineNumbers: 'on',
+            scrollBeyondLastLine: false,
+            wordWrap: 'on',
+            tabSize: 2,
+            formatOnPaste: true,
+            formatOnType: true
+        });
+        // 注册格式化快捷键
+        monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+            saveMonacoData();
+        });
+    });
+};
+
+const saveMonacoData = () => {
+    if (!monacoEditor) return;
+    try {
+        const text = monacoEditor.getValue();
+        const parsed = JSON.parse(text);
+        if (!parsed.categories || !parsed.items) {
+            showToast('JSON 格式不正确：需要 categories 和 items 字段', '#e74c3c');
+            return;
+        }
+        appData = { ...appData, ...parsed, isAdmin: appData.isAdmin, bgUrl: appData.bgUrl };
+        localStorage.setItem('nav_app_data', JSON.stringify(appData));
+        updateGridWidth();
+        renderTools();
+        renderNav();
+        applyBackgroundConfig();
+        saveAll(true);
+        showToast('JSON 数据已保存');
+    } catch (e) {
+        showToast('JSON 解析错误: ' + e.message, '#e74c3c');
+    }
+};
+
+const closeMonacoModal = () => {
+    document.getElementById('monaco-modal').style.display = 'none';
+};
+
+const getCleanAppData = () => {
+    const data = { ...appData };
+    delete data.isAdmin;
+    delete data.bgUrl;
+    return data;
+};
+
+// ==================== 样式切换 ====================
 const initStyleSwitcher = () => {
     document.querySelectorAll('.style-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -101,20 +261,17 @@ const initStyleSwitcher = () => {
             setViewStyle(style);
         });
     });
-    // 恢复上次的样式
     applyViewStyle(currentViewStyle);
 };
 
-/** 切换展示样式 */
 const setViewStyle = (style) => {
-    if (currentViewStyle === style) return; // 相同样式无需处理
+    if (currentViewStyle === style) return;
     currentViewStyle = style;
     localStorage.setItem('nav_view_style', style);
     applyViewStyle(style);
-    renderNav(); // 重新渲染卡片以匹配新样式的 DOM 结构
+    renderNav();
 };
 
-/** 应用样式（更新 body class 和按钮高亮） */
 const applyViewStyle = (style) => {
     document.body.classList.remove('view-style-0', 'view-style-2');
     if (style !== 0) {
@@ -126,13 +283,8 @@ const applyViewStyle = (style) => {
 };
 
 // ==================== 主题切换功能 ====================
+const initThemeMode = () => { applyThemeMode(); };
 
-/** 初始化主题模式 */
-const initThemeMode = () => {
-    applyThemeMode();
-};
-
-/** 应用主题模式 */
 const applyThemeMode = () => {
     document.body.classList.remove('light-theme', 'dark-theme');
     if (themeMode === 'light') {
@@ -142,36 +294,25 @@ const applyThemeMode = () => {
     }
 };
 
-/** 切换主题模式 */
 const toggleThemeMode = () => {
-    if (themeMode === 'auto') {
-        themeMode = 'light';
-    } else if (themeMode === 'light') {
-        themeMode = 'dark';
-    } else {
-        themeMode = 'auto';
-    }
+    if (themeMode === 'auto') themeMode = 'light';
+    else if (themeMode === 'light') themeMode = 'dark';
+    else themeMode = 'auto';
     localStorage.setItem('nav_theme_mode', themeMode);
     applyThemeMode();
     showToast(`主题: ${getThemeModeLabel()}`);
 };
 
-/** 获取主题模式标签 */
 const getThemeModeLabel = () => {
     const labels = { auto: '跟随系统', light: '亮色', dark: '暗色' };
     return labels[themeMode] || '跟随系统';
 };
 
-// ==================== 简约模式功能 ====================
-
-/** 初始化简约模式 */
+// ==================== 简约模式 ====================
 const initSimpleMode = () => {
-    if (simpleMode) {
-        document.body.classList.add('no-blur');
-    }
+    if (simpleMode) document.body.classList.add('no-blur');
 };
 
-/** 切换简约模式 */
 const toggleSimpleMode = () => {
     simpleMode = !simpleMode;
     localStorage.setItem('nav_simple_mode', simpleMode);
@@ -180,11 +321,8 @@ const toggleSimpleMode = () => {
 };
 
 // ==================== 核心函数 ====================
-
 const updateGridWidth = () => {
-    const width = (appData.settings && appData.settings.cardWidth)
-        ? appData.settings.cardWidth
-        : 85;
+    const width = (appData.settings && appData.settings.cardWidth) ? appData.settings.cardWidth : 85;
     document.documentElement.style.setProperty('--card-w', width + 'px');
 };
 
@@ -327,10 +465,12 @@ const init = async (forceRender = false) => {
     }
 };
 
+// ==================== 管理工具渲染 ====================
 const renderTools = () => {
     const adminToolsContainer = document.getElementById('admin-tools');
-    const catManageArea = document.getElementById('cat-manage-area');
+    const sidebarFooter = document.getElementById('sidebar-footer');
     adminToolsContainer.innerHTML = '';
+    sidebarFooter.innerHTML = '';
 
     const createFab = (text, bg, action) => {
         const btn = document.createElement('div');
@@ -345,19 +485,32 @@ const renderTools = () => {
         adminToolsContainer.appendChild(btn);
     };
 
+    const createSidebarBtn = (icon, text, action) => {
+        const btn = document.createElement('div');
+        btn.className = 'sidebar-nav-item';
+        btn.innerHTML = `<span class="nav-icon"><i class="${icon}"></i></span><span class="nav-label">${text}</span>`;
+        btn.addEventListener('click', action);
+        sidebarFooter.appendChild(btn);
+    };
+
     if (isAdmin) {
         document.title = "管理后台";
-        catManageArea.innerHTML = `<button class="manage-cat-btn" id="btn-manage-cats"><i class="ri-settings-line"></i> 偏好设置</button>`;
-        document.getElementById('btn-manage-cats').addEventListener('click', manageCats);
+        // 侧边栏底部管理按钮
+        createSidebarBtn('ri-settings-3-line', '偏好设置', manageCats);
+        createSidebarBtn('ri-code-s-slash-line', 'JSON编辑', openMonacoEditor);
+        createSidebarBtn('ri-save-line', '保存', () => saveAll(false));
+        createSidebarBtn('ri-download-line', '导出', exportConfig);
+        createSidebarBtn('ri-upload-line', '导入', () => document.getElementById('import-file').click());
+        createSidebarBtn('ri-refresh-line', '默认', resetConfig);
+        createSidebarBtn('ri-logout-box-r-line', '登出', doLogout);
 
-        createFab('登出', '#e74c3c', doLogout);
+        // FAB 按钮精简（仅保留保存+登出+JSON）
+        createFab('JSON', '#6c5ce7', openMonacoEditor);
         createFab('保存', 'var(--primary)', () => saveAll(false));
-        createFab('导入', null, () => document.getElementById('import-file').click());
-        createFab('导出', null, exportConfig);
-        createFab('默认', null, resetConfig);
+        createFab('登出', '#e74c3c', doLogout);
     } else {
         document.title = "个人导航";
-        catManageArea.innerHTML = '';
+        sidebarFooter.innerHTML = '';
         createFab('管理', null, () => {
             document.getElementById('auth-overlay').style.display = 'flex';
             setTimeout(() => document.getElementById('auth-input').focus(), 100);
@@ -365,14 +518,7 @@ const renderTools = () => {
     }
 };
 
-// ==================== 卡片 HTML 生成（多样式） ====================
-
-/**
- * 生成网站卡片的 innerHTML
- * @param {Object} item - 网站数据
- * @param {string} adminHtml - 管理员操作按钮 HTML
- * @param {number} style - 当前样式（0 或 2）
- */
+// ==================== 卡片 HTML 生成 ====================
 const buildCardInnerHTML = (item, adminHtml, style) => {
     let fallbackAttr = `onerror="this.outerHTML='<span class=\\'emoji-icon\\'>'+window.utils.getRandomEmoji()+'</span>';"`;
     const safeIcon = utils.escapeHTML(item.icon);
@@ -385,33 +531,23 @@ const buildCardInnerHTML = (item, adminHtml, style) => {
     const safeTitle = utils.escapeHTML(item.title);
 
     if (style === 2) {
-        // 缤纷模式布局：图标在左，标题在右
         return `${adminHtml}<a href="${safeUrl}" target="_blank">
             <div class="icon-wrapper">${iconHtml}</div>
-            <div class="card-text-block">
-                <h3>${safeTitle}</h3>
-            </div>
+            <div class="card-text-block"><h3>${safeTitle}</h3></div>
         </a>`;
     } else {
-        // 默认网格布局：图标在上，标题在下
         return `${adminHtml}<a href="${safeUrl}" target="_blank"><div class="icon-wrapper">${iconHtml}</div><h3>${safeTitle}</h3></a>`;
     }
 };
 
 // ==================== 批量选择功能 ====================
-
-/** 切换卡片选中状态 */
 const toggleCardSelection = (id) => {
-    if (selectedCardIds.has(id)) {
-        selectedCardIds.delete(id);
-    } else {
-        selectedCardIds.add(id);
-    }
+    if (selectedCardIds.has(id)) selectedCardIds.delete(id);
+    else selectedCardIds.add(id);
     updateBatchUI();
     renderNav();
 };
 
-/** 更新批量操作UI */
 const updateBatchUI = () => {
     let batchBar = document.querySelector('.batch-actions-bar');
     if (selectedCardIds.size > 0) {
@@ -425,7 +561,6 @@ const updateBatchUI = () => {
                 <button class="batch-btn" id="batch-cancel-btn" style="background:rgba(150,150,150,0.8); color:white;">取消</button>
             `;
             document.body.appendChild(batchBar);
-            
             document.getElementById('batch-delete-btn').addEventListener('click', batchDelete);
             document.getElementById('batch-move-btn').addEventListener('click', showBatchMoveDialog);
             document.getElementById('batch-cancel-btn').addEventListener('click', clearSelection);
@@ -433,37 +568,29 @@ const updateBatchUI = () => {
         batchBar.classList.add('visible');
         document.getElementById('batch-count').textContent = selectedCardIds.size;
     } else {
-        if (batchBar) {
-            batchBar.classList.remove('visible');
-        }
+        if (batchBar) batchBar.classList.remove('visible');
     }
 };
 
-/** 清空选择 */
 const clearSelection = () => {
     selectedCardIds.clear();
     updateBatchUI();
     renderNav();
 };
 
-/** 批量删除 */
 const batchDelete = () => {
     if (selectedCardIds.size === 0) return;
     if (!confirm(`确定删除选中的 ${selectedCardIds.size} 个网站？`)) return;
-    
     appData.items = appData.items.filter(item => !selectedCardIds.has(item.id));
     clearSelection();
     saveAll(false);
     showToast('批量删除成功');
 };
 
-/** 显示批量移动对话框 */
 const showBatchMoveDialog = () => {
     if (selectedCardIds.size === 0) return;
-    
     const cats = appData.categories;
     const catOptions = cats.map(c => `<option value="${c.id}">${utils.escapeHTML(c.icon)} ${utils.escapeHTML(c.name)}</option>`).join('');
-    
     const dialog = document.createElement('div');
     dialog.className = 'modal';
     dialog.style.display = 'flex';
@@ -478,30 +605,22 @@ const showBatchMoveDialog = () => {
         </div>
     `;
     document.body.appendChild(dialog);
-    
-    document.getElementById('batch-move-cancel').addEventListener('click', () => {
-        document.body.removeChild(dialog);
-    });
-    
+    document.getElementById('batch-move-cancel').addEventListener('click', () => document.body.removeChild(dialog));
     document.getElementById('batch-move-confirm').addEventListener('click', () => {
         const targetCatId = document.getElementById('batch-move-cat').value;
-        appData.items.forEach(item => {
-            if (selectedCardIds.has(item.id)) {
-                item.catId = targetCatId;
-            }
-        });
+        appData.items.forEach(item => { if (selectedCardIds.has(item.id)) item.catId = targetCatId; });
         document.body.removeChild(dialog);
         clearSelection();
         saveAll(false);
-        showToast(`已移动 ${selectedCardIds.size} 个网站到目标分类`);
+        showToast(`已移动到目标分类`);
     });
 };
 
-/** 渲染导航内容 */
+// ==================== 渲染导航内容（连续滚动） ====================
 const renderNav = () => {
-    const tabs = document.getElementById('tabs');
+    const sidebarNav = document.getElementById('sidebar-nav');
     const container = document.getElementById('grid-container');
-    tabs.innerHTML = '';
+    sidebarNav.innerHTML = '';
     container.innerHTML = '';
 
     const clickData = JSON.parse(localStorage.getItem('nav_clicks') || '{}');
@@ -509,6 +628,7 @@ const renderNav = () => {
 
     let cats = isAdmin ? [...appData.categories] : appData.categories.filter(c => !c.hidden);
 
+    // 常去虚拟分类
     if (hasFrequent) {
         cats.unshift({ id: 'VIRTUAL_FREQ', name: '常去', icon: '⭐', hidden: false });
     }
@@ -516,24 +636,274 @@ const renderNav = () => {
     if (cats.length > 0 && !activeCatId) activeCatId = cats[0].id;
     if (!cats.find(c => c.id === activeCatId) && cats.length > 0) activeCatId = cats[0].id;
 
+    // 渲染侧边栏导航项
     cats.forEach((cat) => {
-        const btn = document.createElement('button');
-        btn.className = 'tab-btn' + (activeCatId === cat.id ? ' active' : '') + (cat.hidden ? ' hidden-item' : '');
-        btn.innerHTML = utils.escapeHTML(cat.icon) + ' ' + utils.escapeHTML(cat.name);
-        btn.addEventListener('click', () => {
+        const item = document.createElement('div');
+        item.className = 'sidebar-nav-item' + (activeCatId === cat.id ? ' active' : '') + (cat.hidden ? ' hidden-item' : '');
+        item.setAttribute('data-cat-id', cat.id);
+        item.innerHTML = `<span class="nav-icon">${utils.escapeHTML(cat.icon)}</span><span class="nav-label">${utils.escapeHTML(cat.name)}</span>`;
+        item.addEventListener('click', () => {
             activeCatId = cat.id;
             renderNav();
+            // 滚动到对应分类区块
+            const section = document.getElementById('section-' + cat.id);
+            if (section) {
+                section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
         });
-        tabs.appendChild(btn);
+        sidebarNav.appendChild(item);
     });
 
-    const activeCat = cats.find(c => c.id === activeCatId);
-    if (activeCat) {
-        const grid = document.createElement('div');
-        grid.id = 'grid-' + activeCat.id;
-        grid.className = 'nav-grid active';
+    // 连续滚动：渲染所有分类区块
+    cats.forEach((cat) => {
+        const section = document.createElement('div');
+        section.className = 'category-section';
+        section.id = 'section-' + cat.id;
 
-        grid.addEventListener('click', (e) => {
+        // 分类标题
+        const title = document.createElement('div');
+        title.className = 'category-section-title';
+        title.innerHTML = `<span class="cat-icon">${utils.escapeHTML(cat.icon)}</span> ${utils.escapeHTML(cat.name)}`;
+        section.appendChild(title);
+
+        // 判断是否为视频分类
+        const catIsVideo = isVideoCategory(cat);
+
+        // 获取该分类下的项目
+        let catItems = [];
+        if (cat.id === 'VIRTUAL_FREQ') {
+            const allAvailableItems = appData.items.filter(i => isAdmin || !i.hidden);
+            catItems = allAvailableItems
+                .filter(i => clickData[i.id] > 0)
+                .sort((a, b) => (clickData[b.id] || 0) - (clickData[a.id] || 0))
+                .slice(0, 12);
+        } else {
+            catItems = appData.items.filter(i => i.catId === cat.id && (isAdmin || !i.hidden));
+        }
+
+        if (catIsVideo) {
+            // 视频分类：使用视频卡片网格
+            const videoGrid = document.createElement('div');
+            videoGrid.className = 'video-grid';
+
+            catItems.forEach((item) => {
+                const videoInfo = detectVideoPlatform(item.url);
+                const videoCard = buildVideoCard(item, videoInfo);
+                videoGrid.appendChild(videoCard);
+            });
+
+            // 管理员模式：新增卡片
+            if (isAdmin && cat.id !== 'VIRTUAL_FREQ') {
+                const addCard = document.createElement('div');
+                addCard.className = 'video-card';
+                addCard.style.borderStyle = 'dashed';
+                addCard.style.display = 'flex';
+                addCard.style.alignItems = 'center';
+                addCard.style.justifyContent = 'center';
+                addCard.style.minHeight = '120px';
+                addCard.innerHTML = `<div style="text-align:center; color:rgba(255,255,255,0.5);"><i class="ri-add-line" style="font-size:32px;"></i><div style="font-size:12px; margin-top:4px;">新增</div></div>`;
+                addCard.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    openItemEdit('', cat.id);
+                });
+                videoGrid.appendChild(addCard);
+            }
+
+            section.appendChild(videoGrid);
+        } else {
+            // 普通网站分类：使用原有网格
+            const grid = document.createElement('div');
+            grid.className = 'nav-grid';
+            grid.id = 'grid-' + cat.id;
+
+            grid.addEventListener('click', (e) => {
+                const actionBtn = e.target.closest('.action-mini');
+                if (actionBtn) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const action = actionBtn.getAttribute('data-action');
+                    const targetId = actionBtn.getAttribute('data-id');
+                    if (action === 'toggleHide') toggleHide('items', targetId);
+                    if (action === 'edit') openItemEdit(targetId, null);
+                    if (action === 'delete') deleteObj('items', targetId);
+                    return;
+                }
+                if (e.target.closest('.card-add-new')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openItemEdit('', cat.id);
+                }
+            });
+
+            const fragment = document.createDocumentFragment();
+
+            catItems.forEach((item) => {
+                const card = document.createElement('div');
+                card.className = 'card' + (item.hidden ? ' hidden-item' : '');
+                card.setAttribute('data-id', utils.escapeHTML(item.id));
+
+                // 检测是否有视频链接（非视频分类中的视频链接）
+                const videoInfo = detectVideoPlatform(item.url);
+
+                if (currentViewStyle === 2 && item.bgColor) {
+                    card.style.setProperty('--card-bg-color', item.bgColor);
+                    card.classList.add('has-bg');
+                }
+
+                const safeDesc = utils.escapeHTML(item.desc || '');
+                const safeTitle = utils.escapeHTML(item.title);
+                const tooltip = safeDesc ? `${safeTitle}\n${safeDesc}` : safeTitle;
+                card.setAttribute('data-tooltip', tooltip);
+
+                let adminHtml = '';
+                if (isAdmin && cat.id !== 'VIRTUAL_FREQ') {
+                    adminHtml = `<div class="admin-actions">
+                        <button class="action-mini batch-select-btn" data-id="${utils.escapeHTML(item.id)}"><i class="ri-checkbox-${selectedCardIds.has(item.id) ? 'fill' : 'blank-line'}"></i></button>
+                        <button class="action-mini" data-action="toggleHide" data-id="${utils.escapeHTML(item.id)}"><i class="ri-eye-${item.hidden ? 'off-' : ''}line"></i></button>
+                        <button class="action-mini" data-action="edit" data-id="${utils.escapeHTML(item.id)}"><i class="ri-edit-line"></i></button>
+                        <button class="action-mini" data-action="delete" data-id="${utils.escapeHTML(item.id)}"><i class="ri-delete-bin-line"></i></button>
+                    </div>`;
+                }
+
+                card.innerHTML = buildCardInnerHTML(item, adminHtml, currentViewStyle);
+
+                // 如果检测到视频链接，点击卡片打开视频播放弹窗
+                if (videoInfo) {
+                    const linkEl = card.querySelector('a');
+                    if (linkEl) {
+                        linkEl.addEventListener('click', (e) => {
+                            if (e.target.closest('.admin-actions')) return;
+                            e.preventDefault();
+                            openVideoModal(item, videoInfo);
+                        });
+                    }
+                }
+
+                if (selectedCardIds.has(item.id)) {
+                    card.classList.add('selected');
+                }
+                fragment.appendChild(card);
+            });
+
+            // 新增卡片按钮
+            if (isAdmin && cat.id !== 'VIRTUAL_FREQ') {
+                const addCard = document.createElement('div');
+                addCard.className = 'card card-add-new';
+                addCard.style.borderStyle = 'dashed';
+                if (currentViewStyle === 2) {
+                    addCard.innerHTML = `<a href="javascript:void(0)">
+                        <div class="icon-wrapper"><div class="emoji-icon">➕</div></div>
+                        <div class="card-text-block"><h3>新增</h3></div>
+                    </a>`;
+                } else {
+                    addCard.innerHTML = '<a href="javascript:void(0)"><div class="icon-wrapper"><div class="emoji-icon">➕</div></div><h3>新增</h3></a>';
+                }
+                fragment.appendChild(addCard);
+            }
+
+            grid.appendChild(fragment);
+            section.appendChild(grid);
+
+            // 批量选择事件
+            if (isAdmin && cat.id !== 'VIRTUAL_FREQ') {
+                grid.querySelectorAll('.batch-select-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const id = btn.getAttribute('data-id');
+                        toggleCardSelection(id);
+                    });
+                });
+            }
+
+            // 拖拽排序
+            if (isAdmin && typeof Sortable !== 'undefined' && cat.id !== 'VIRTUAL_FREQ') {
+                new Sortable(grid, {
+                    animation: 150,
+                    ghostClass: 'sortable-ghost',
+                    filter: '.card-add-new',
+                    onMove: (evt) => { if (evt.related.classList.contains('card-add-new')) return false; },
+                    onEnd: () => {
+                        const newIdOrder = Array.from(grid.querySelectorAll('.card[data-id]')).map(el => el.getAttribute('data-id'));
+                        const currentCatItems = appData.items.filter(i => i.catId === cat.id);
+                        const sortedCurrentItems = newIdOrder.map(id => currentCatItems.find(i => i.id === id));
+                        let newGlobalItems = [];
+                        appData.categories.forEach(c => {
+                            if (c.id === cat.id) newGlobalItems.push(...sortedCurrentItems);
+                            else newGlobalItems.push(...appData.items.filter(i => i.catId === c.id));
+                        });
+                        appData.items = newGlobalItems;
+                        saveAll(true);
+                    }
+                });
+            }
+        }
+
+        container.appendChild(section);
+    });
+
+    // 滚动监听：自动高亮当前可见分类
+    initScrollSpy();
+};
+
+// ==================== 视频卡片构建 ====================
+const buildVideoCard = (item, videoInfo) => {
+    const card = document.createElement('div');
+    card.className = 'video-card';
+    card.setAttribute('data-id', utils.escapeHTML(item.id));
+
+    const safeTitle = utils.escapeHTML(item.title);
+    const safeDesc = utils.escapeHTML(item.desc || '');
+    const safeUrl = utils.escapeHTML(item.url);
+
+    // 平台标识
+    let badgeHtml = '';
+    if (videoInfo) {
+        const badgeClass = videoInfo.type === 'bilibili' ? 'bilibili' : 'youtube';
+        const badgeText = videoInfo.type === 'bilibili' ? 'Bilibili' : 'YouTube';
+        badgeHtml = `<div class="video-card-badge ${badgeClass}">${badgeText}</div>`;
+    }
+
+    // 封面区域
+    const coverUrl = videoInfo?.type === 'bilibili'
+        ? `https://i0.hdslb.com/bfs/archive/${videoInfo.bvid}.jpg@480w_270h_1c.webp`
+        : videoInfo?.type === 'youtube'
+            ? `https://img.youtube.com/vi/${videoInfo.videoId}/mqdefault.jpg`
+            : '';
+
+    const coverHtml = coverUrl
+        ? `<img src="${coverUrl}" alt="${safeTitle}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'video-card-cover-fallback\\'><i class=\\'ri-play-circle-line\\'></i></div>';">`
+        : `<div class="video-card-cover-fallback"><i class="ri-play-circle-line"></i></div>`;
+
+    // 管理员操作
+    let adminHtml = '';
+    if (isAdmin) {
+        adminHtml = `<div class="admin-actions">
+            <button class="action-mini" data-action="toggleHide" data-id="${utils.escapeHTML(item.id)}"><i class="ri-eye-${item.hidden ? 'off-' : ''}line"></i></button>
+            <button class="action-mini" data-action="edit" data-id="${utils.escapeHTML(item.id)}"><i class="ri-edit-line"></i></button>
+            <button class="action-mini" data-action="delete" data-id="${utils.escapeHTML(item.id)}"><i class="ri-delete-bin-line"></i></button>
+        </div>`;
+    }
+
+    card.innerHTML = `
+        ${adminHtml}
+        <div class="video-card-cover">
+            ${badgeHtml}
+            ${coverHtml}
+            <div class="video-play-overlay">
+                <div class="video-play-btn"><i class="ri-play-fill"></i></div>
+            </div>
+        </div>
+        <div class="video-card-body">
+            <div class="video-card-title">${safeTitle}</div>
+            <div class="video-card-desc">${safeDesc || (videoInfo ? (videoInfo.type === 'bilibili' ? 'Bilibili' : 'YouTube') : '')}</div>
+        </div>
+    `;
+
+    // 点击播放视频
+    card.addEventListener('click', (e) => {
+        if (e.target.closest('.admin-actions')) {
+            // 管理操作
             const actionBtn = e.target.closest('.action-mini');
             if (actionBtn) {
                 e.preventDefault();
@@ -543,129 +913,58 @@ const renderNav = () => {
                 if (action === 'toggleHide') toggleHide('items', targetId);
                 if (action === 'edit') openItemEdit(targetId, null);
                 if (action === 'delete') deleteObj('items', targetId);
-                return;
             }
-            if (e.target.closest('.card-add-new')) {
-                e.preventDefault();
-                e.stopPropagation();
-                openItemEdit('', activeCat ? activeCat.id : '');
-            }
-        });
-
-        const fragment = document.createDocumentFragment();
-
-        let catItems = [];
-        if (activeCat.id === 'VIRTUAL_FREQ') {
-            const allAvailableItems = appData.items.filter(i => isAdmin || !i.hidden);
-            catItems = allAvailableItems
-                .filter(i => clickData[i.id] > 0)
-                .sort((a, b) => (clickData[b.id] || 0) - (clickData[a.id] || 0))
-                .slice(0, 12);
-        } else {
-            catItems = appData.items.filter(i => i.catId === activeCat.id && (isAdmin || !i.hidden));
+            return;
         }
-
-        catItems.forEach((item) => {
-            const card = document.createElement('div');
-            card.className = 'card' + (item.hidden ? ' hidden-item' : '');
-            card.setAttribute('data-id', utils.escapeHTML(item.id));
-
-            // 缤纷模式：应用用户自定义网格背景色
-            if (currentViewStyle === 2 && item.bgColor) {
-                card.style.setProperty('--card-bg-color', item.bgColor);
-                card.classList.add('has-bg');
-            }
-
-            const safeDesc = utils.escapeHTML(item.desc || '');
-            const safeTitle = utils.escapeHTML(item.title);
-            const tooltip = safeDesc ? `${safeTitle}\n${safeDesc}` : safeTitle;
-            card.setAttribute('data-tooltip', tooltip);
-
-            let adminHtml = '';
-            if (isAdmin && activeCat.id !== 'VIRTUAL_FREQ') {
-                adminHtml = `<div class="admin-actions">
-                    <button class="action-mini batch-select-btn" data-id="${utils.escapeHTML(item.id)}"><i class="ri-checkbox-${selectedCardIds.has(item.id) ? 'fill' : 'blank-line'}"></i></button>
-                    <button class="action-mini" data-action="toggleHide" data-id="${utils.escapeHTML(item.id)}"><i class="ri-eye-${item.hidden ? 'off-' : ''}line"></i></button>
-                    <button class="action-mini" data-action="edit" data-id="${utils.escapeHTML(item.id)}"><i class="ri-edit-line"></i></button>
-                    <button class="action-mini" data-action="delete" data-id="${utils.escapeHTML(item.id)}"><i class="ri-delete-bin-line"></i></button>
-                </div>`;
-            }
-
-            card.innerHTML = buildCardInnerHTML(item, adminHtml, currentViewStyle);
-            
-            if (selectedCardIds.has(item.id)) {
-                card.classList.add('selected');
-            }
-            fragment.appendChild(card);
-        });
-
-        // 新增卡片按钮
-        if (isAdmin && activeCat.id !== 'VIRTUAL_FREQ') {
-            const addCard = document.createElement('div');
-            addCard.className = 'card card-add-new';
-            addCard.style.borderStyle = 'dashed';
-
-            if (currentViewStyle === 2) {
-                addCard.innerHTML = `<a href="javascript:void(0)">
-                    <div class="icon-wrapper"><div class="emoji-icon">➕</div></div>
-                    <div class="card-text-block"><h3>新增</h3></div>
-                </a>`;
-            } else {
-                addCard.innerHTML = '<a href="javascript:void(0)"><div class="icon-wrapper"><div class="emoji-icon">➕</div></div><h3>新增</h3></a>';
-            }
-            fragment.appendChild(addCard);
+        if (videoInfo) {
+            e.preventDefault();
+            openVideoModal(item, videoInfo);
+        } else if (item.url) {
+            window.open(item.url, '_blank');
         }
+    });
 
-        grid.appendChild(fragment);
-        container.appendChild(grid);
-        
-        // 添加批量选择事件监听
-        if (isAdmin && activeCat.id !== 'VIRTUAL_FREQ') {
-            grid.querySelectorAll('.batch-select-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const id = btn.getAttribute('data-id');
-                    toggleCardSelection(id);
-                });
-            });
-        }
-
-        // 初始化拖拽排序
-        if (isAdmin && typeof Sortable !== 'undefined' && activeCat.id !== 'VIRTUAL_FREQ') {
-            new Sortable(grid, {
-                animation: 150,
-                ghostClass: 'sortable-ghost',
-                filter: '.card-add-new',
-                onMove: (evt) => {
-                    if (evt.related.classList.contains('card-add-new')) return false;
-                },
-                onEnd: () => {
-                    const newIdOrder = Array.from(grid.querySelectorAll('.card[data-id]'))
-                        .map(el => el.getAttribute('data-id'));
-
-                    const currentCatItems = appData.items.filter(i => i.catId === activeCat.id);
-                    const sortedCurrentItems = newIdOrder.map(id => currentCatItems.find(i => i.id === id));
-
-                    let newGlobalItems = [];
-                    appData.categories.forEach(cat => {
-                        if (cat.id === activeCat.id) {
-                            newGlobalItems.push(...sortedCurrentItems);
-                        } else {
-                            newGlobalItems.push(...appData.items.filter(i => i.catId === cat.id));
-                        }
-                    });
-
-                    appData.items = newGlobalItems;
-                    saveAll(true);
-                }
-            });
-        }
+    if (item.hidden) {
+        card.style.opacity = '0.3';
+        card.style.filter = 'grayscale(1)';
     }
+
+    return card;
+};
+
+// ==================== 滚动监听（自动高亮侧边栏） ====================
+let scrollSpyInitialized = false;
+const initScrollSpy = () => {
+    // 使用 IntersectionObserver 替代 scroll 监听以提升性能
+    const sections = document.querySelectorAll('.category-section');
+    if (sections.length === 0) return;
+
+    // 清理旧的 observer
+    if (window._scrollSpyObserver) {
+        window._scrollSpyObserver.disconnect();
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const catId = entry.target.id.replace('section-', '');
+                activeCatId = catId;
+                // 更新侧边栏高亮
+                document.querySelectorAll('.sidebar-nav-item').forEach(item => {
+                    item.classList.toggle('active', item.getAttribute('data-cat-id') === catId);
+                });
+            }
+        });
+    }, {
+        rootMargin: '-20% 0px -60% 0px',
+        threshold: 0
+    });
+
+    sections.forEach(section => observer.observe(section));
+    window._scrollSpyObserver = observer;
 };
 
 // ==================== 编辑相关函数 ====================
-
 const debouncedHandleUrlInput = utils.debounce((val) => handleUrlInput(val), 500);
 
 const openItemEdit = (id, catId) => {
@@ -682,9 +981,17 @@ const openItemEdit = (id, catId) => {
     const safeDesc = utils.escapeHTML(item.desc || '');
     const safeBgColor = utils.escapeHTML(item.bgColor || '');
 
+    // 检测当前是否为视频分类
+    const currentCat = appData.categories.find(c => c.id === (item.catId || catId));
+    const isVideoCat = currentCat && isVideoCategory(currentCat);
+    const videoInfo = detectVideoPlatform(item.url);
+
     document.getElementById('edit-title').innerText = id ? '编辑网站' : '新增网站';
     document.getElementById('edit-form-body').innerHTML = `
         <div class="form-row"><label>网站 URL</label><input id="f-url" value="${safeUrl}"></div>
+        ${isVideoCat || videoInfo ? `<div style="background:rgba(57,157,255,0.1); border:1px solid rgba(57,157,255,0.3); border-radius:8px; padding:8px 12px; margin-bottom:8px; font-size:12px; color:rgba(255,255,255,0.8);">
+            <i class="ri-film-line"></i> 视频链接已自动识别${videoInfo ? '（' + (videoInfo.type === 'bilibili' ? 'Bilibili' : 'YouTube') + '）' : ''}，点击卡片将直接播放
+        </div>` : ''}
         <div class="form-row"><label>网站名称</label><input id="f-title" value="${safeTitle}"></div>
         <div class="form-row"><label>网站说明</label><input id="f-desc" value="${safeDesc}" placeholder="选填，鼠标悬停时显示"></div>
         <div class="form-row"><label>当前图标</label>
@@ -746,9 +1053,7 @@ const openItemEdit = (id, catId) => {
     const colorText = document.getElementById('f-bg-color-text');
     colorInput.addEventListener('input', () => { colorText.value = colorInput.value; });
     colorText.addEventListener('input', () => {
-        if (/^#[0-9a-fA-F]{6}$/.test(colorText.value)) {
-            colorInput.value = colorText.value;
-        }
+        if (/^#[0-9a-fA-F]{6}$/.test(colorText.value)) colorInput.value = colorText.value;
     });
 
     document.getElementById('f-url').addEventListener('input', (e) => debouncedHandleUrlInput(e.target.value));
@@ -758,9 +1063,7 @@ const openItemEdit = (id, catId) => {
         const opt = document.getElementById('opt-fav' + num);
         const txt = document.getElementById('txt-fav' + num);
         opt.addEventListener('change', () => selectIcon(txt.value));
-        txt.addEventListener('click', () => {
-            if (txt.value) { opt.checked = true; selectIcon(txt.value); }
-        });
+        txt.addEventListener('click', () => { if (txt.value) { opt.checked = true; selectIcon(txt.value); } });
     });
 
     document.getElementById('btn-iconify-search').addEventListener('click', async () => {
@@ -801,14 +1104,14 @@ const openItemEdit = (id, catId) => {
         'game': '🎮', 'games': '🎲', '游戏': '🎮', 'play': '▶️',
         'book': '📚', 'read': '📖', 'learn': '📝', '学习': '📚', '教育': '🎓',
         'news': '📰', 'newspaper': '📰', '新闻': '📰', 'blog': '📝',
-        'weather': '🌤️', 'weather': '🌤️', '天气': '🌤️',
+        'weather': '🌤️', '天气': '🌤️',
         'photo': '📷', 'image': '🖼️', '图片': '🖼️', 'camera': '📸',
         'food': '🍔', 'restaurant': '🍽️', '美食': '🍜', 'eat': '🍕',
         'travel': '✈️', 'trip': '🧳', '旅行': '🧳', 'map': '🗺️',
         'money': '💰', 'finance': '💵', 'pay': '💳', '支付': '💳', 'bank': '🏦',
         'cloud': '☁️', 'cloudflare': '☁️', 'aws': '☁️', 'server': '🖥️',
-        'chat': '💬', 'message': '💬', 'talk': '🗣️', 'ai': '🤖', 'bot': '🤖',
-        'home': '🏠', 'house': '🏡', 'home': '🏠', '生活': '🏠',
+        'chat': '💬', 'talk': '🗣️', 'ai': '🤖', 'bot': '🤖',
+        'home': '🏠', '生活': '🏠',
         'work': '💼', 'office': '🏢', 'business': '💼', '工作': '💼',
         'health': '🏥', 'medical': '🏥', '医院': '🏥', 'doctor': '👨‍⚕️',
         'sport': '⚽', 'sports': '🏃', '运动': '⚽', 'fitness': '💪',
@@ -823,20 +1126,17 @@ const openItemEdit = (id, catId) => {
         'wifi': '📶', 'network': '🌐', 'internet': '🌐', 'web': '🌐',
         'notification': '🔔', 'bell': '🔔', 'alert': '⚠️', '通知': '🔔',
         'fire': '🔥', 'hot': '🔥', 'trending': '📈', '热门': '🔥',
-        'bookmark': '🔖', 'save': '💾', 'flag': '🚩', '标记': '🔖'
+        'bilibili': '📺', 'b站': '📺', '哔哩哔哩': '📺'
     };
 
     const getRecommendedEmojis = (title) => {
         const results = new Set();
         const lowerTitle = title.toLowerCase();
         for (const [keyword, emoji] of Object.entries(EMOJI_KEYWORDS)) {
-            if (lowerTitle.includes(keyword)) {
-                results.add(emoji);
-            }
+            if (lowerTitle.includes(keyword)) results.add(emoji);
         }
         if (results.size === 0) {
-            const pool = window.emojiPool ? window.emojiPool.getRandomEmojis(8) : ['🌐', '🔗', '📌', '⭐', '💡', '✨', '🎯', '🚀'];
-            return pool;
+            return window.emojiPool ? window.emojiPool.getRandomEmojis(8) : ['🌐', '🔗', '📌', '⭐', '💡', '✨', '🎯', '🚀'];
         }
         const extras = window.emojiPool ? window.emojiPool.getRandomEmojis(4) : ['🌟', '💫', '✨', '🔮'];
         return [...results, ...extras].slice(0, 8);
@@ -851,9 +1151,6 @@ const openItemEdit = (id, catId) => {
             span.className = 'emoji-suggestion';
             span.textContent = emoji;
             span.dataset.emoji = emoji;
-            span.style.cssText = 'cursor:pointer; padding:4px 8px; font-size:20px; border-radius:6px; background:rgba(255,255,255,0.1); transition:0.2s;';
-            span.onmouseover = () => span.style.background = 'rgba(57,157,255,0.3)';
-            span.onmouseout = () => span.style.background = 'rgba(255,255,255,0.1)';
             span.onclick = () => {
                 document.querySelectorAll('.emoji-suggestion').forEach(el => el.classList.remove('selected'));
                 span.classList.add('selected');
@@ -865,15 +1162,12 @@ const openItemEdit = (id, catId) => {
 
     const recommendEmojis = () => {
         const title = document.getElementById('emoji-recommend-title').value;
-        const emojis = getRecommendedEmojis(title || safeTitle);
-        renderEmojiSuggestions(emojis);
+        renderEmojiSuggestions(getRecommendedEmojis(title || safeTitle));
     };
 
     document.getElementById('btn-emoji-recommend').addEventListener('click', recommendEmojis);
     document.getElementById('btn-emoji-refresh').addEventListener('click', () => {
-        const title = document.getElementById('emoji-recommend-title').value;
-        const emojis = getRecommendedEmojis(title || safeTitle);
-        renderEmojiSuggestions(emojis);
+        renderEmojiSuggestions(getRecommendedEmojis(document.getElementById('emoji-recommend-title').value || safeTitle));
     });
     document.getElementById('emoji-recommend-title').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') recommendEmojis();
@@ -896,12 +1190,10 @@ const handleUrlInput = (url, autoSelect = true) => {
             const domain = new URL(url).hostname;
             const icon1 = "https://favicon.im/" + domain;
             const icon2 = "https://icons.duckduckgo.com/ip3/" + domain + ".ico";
-
             document.getElementById('txt-fav1').value = icon1;
             document.getElementById('img-fav1').src = icon1;
             document.getElementById('txt-fav2').value = icon2;
             document.getElementById('img-fav2').src = icon2;
-
             const currentIconVal = document.getElementById('f-icon').value;
             if (autoSelect && !currentIconVal) {
                 document.getElementById('opt-fav1').checked = true;
@@ -937,6 +1229,7 @@ const updatePreview = (val) => {
     }
 };
 
+// ==================== 分类管理 ====================
 const manageCats = () => {
     editingType = 'cats';
     document.getElementById('edit-title').innerText = '偏好与分类设置';
@@ -979,6 +1272,9 @@ const manageCats = () => {
                     <i class="ri-drag-move-fill drag-handle"></i>
                     <input class="cat-icon-input" data-id="${utils.escapeHTML(c.id)}" value="${utils.escapeHTML(c.icon)}" style="width:40px; text-align:center; padding:5px">
                     <input class="cat-name-input" data-id="${utils.escapeHTML(c.id)}" value="${utils.escapeHTML(c.name)}" style="flex:1; padding:5px">
+                    <label style="font-size:11px; color:#999; display:flex; align-items:center; gap:3px; flex-shrink:0; cursor:pointer;">
+                        <input type="checkbox" class="cat-video-toggle" data-id="${utils.escapeHTML(c.id)}" ${c._isVideo ? 'checked' : ''} style="width:14px; height:14px; cursor:pointer;"> 🎬
+                    </label>
                     <button class="action-mini btn-cat-hide" data-id="${utils.escapeHTML(c.id)}"><i class="ri-eye-${c.hidden ? 'off-' : ''}line"></i></button>
                     <button class="action-mini btn-cat-del" data-id="${utils.escapeHTML(c.id)}"><i class="ri-delete-bin-line"></i></button>
                 </div>
@@ -988,13 +1284,11 @@ const manageCats = () => {
     `;
 
     document.getElementById('setting-width').addEventListener('input', (e) => changeCardWidth(e.target.value));
-
     document.getElementById('setting-theme').addEventListener('change', (e) => {
         themeMode = e.target.value;
         localStorage.setItem('nav_theme_mode', themeMode);
         applyThemeMode();
     });
-
     document.getElementById('setting-simple-mode').addEventListener('change', (e) => {
         simpleMode = e.target.checked;
         localStorage.setItem('nav_simple_mode', simpleMode);
@@ -1003,19 +1297,15 @@ const manageCats = () => {
 
     const bgColorPicker = document.getElementById('setting-bg-color');
     const bgTextInput = document.getElementById('setting-bg');
-    // 取色器 → 文字输入框联动
     bgColorPicker.addEventListener('input', () => {
         bgTextInput.value = bgColorPicker.value;
         if (!appData.settings) appData.settings = {};
         appData.settings.bgUrl = bgColorPicker.value;
         applyBackgroundConfig();
     });
-    // 文字输入框 → 取色器联动
     bgTextInput.addEventListener('input', () => {
         const val = bgTextInput.value.trim();
-        if (/^#[0-9a-fA-F]{6}$/.test(val)) {
-            bgColorPicker.value = val;
-        }
+        if (/^#[0-9a-fA-F]{6}$/.test(val)) bgColorPicker.value = val;
         if (!appData.settings) appData.settings = {};
         appData.settings.bgUrl = val;
         applyBackgroundConfig();
@@ -1028,9 +1318,11 @@ const manageCats = () => {
             updateCatData(e.target.getAttribute('data-id'), 'icon', e.target.value);
         } else if (e.target.classList.contains('cat-name-input')) {
             updateCatData(e.target.getAttribute('data-id'), 'name', e.target.value);
+        } else if (e.target.classList.contains('cat-video-toggle')) {
+            updateCatData(e.target.getAttribute('data-id'), '_isVideo', e.target.checked);
+            renderNav();
         }
     });
-
     catListSort.addEventListener('click', (e) => {
         const hideBtn = e.target.closest('.btn-cat-hide');
         if (hideBtn) { e.preventDefault(); toggleHide('categories', hideBtn.getAttribute('data-id')); }
@@ -1043,10 +1335,8 @@ const manageCats = () => {
         handle: '.drag-handle',
         ghostClass: 'sortable-ghost',
         onEnd: () => {
-            const newIdOrder = Array.from(catListSort.querySelectorAll('.cat-item-row'))
-                .map(el => el.getAttribute('data-id'));
+            const newIdOrder = Array.from(catListSort.querySelectorAll('.cat-item-row')).map(el => el.getAttribute('data-id'));
             appData.categories = newIdOrder.map(id => appData.categories.find(c => c.id === id));
-
             let newGlobalItems = [];
             appData.categories.forEach(cat => {
                 newGlobalItems.push(...appData.items.filter(i => i.catId === cat.id));
@@ -1080,7 +1370,6 @@ const addCat = () => {
         nextLetter = String.fromCharCode(maxCharCode + 1);
     }
     if (nextLetter > 'Z') nextLetter = 'Z' + Date.now().toString().slice(-2);
-
     appData.categories.push({ id: `${nextLetter}01`, name: '新分类', icon: '📁', hidden: false });
     manageCats();
     renderNav();
@@ -1136,7 +1425,6 @@ const deleteObj = (type, id) => {
 };
 
 // ==================== 认证相关 ====================
-
 const doLogin = async () => {
     showLoader('正在验证管理员身份...');
     const rawPwd = document.getElementById('auth-input').value.trim();
@@ -1173,7 +1461,6 @@ const doLogout = async () => {
 };
 
 // ==================== 数据操作 ====================
-
 const saveAll = async (silent = false) => {
     if (!silent) showLoader('正在同步配置中...');
 
@@ -1223,10 +1510,8 @@ const importConfig = (event) => {
 const exportConfig = () => {
     let sortedItems = [];
     appData.categories.forEach(cat => {
-        const catItems = appData.items.filter(i => i.catId === cat.id);
-        sortedItems.push(...catItems);
+        sortedItems.push(...appData.items.filter(i => i.catId === cat.id));
     });
-
     const dataToExport = { settings: appData.settings, categories: appData.categories, items: sortedItems };
     let jsonStr = JSON.stringify(dataToExport, null, 2);
     jsonStr = jsonStr.replace(/\{[\s\S]*?\}/g, (match) => match.replace(/\n\s+/g, ' '));
@@ -1269,14 +1554,9 @@ const closeModal = () => {
 };
 
 // ==================== 事件绑定 ====================
-
 document.getElementById('btn-login').addEventListener('click', doLogin);
-document.getElementById('auth-input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') doLogin();
-});
-document.getElementById('btn-close-auth').addEventListener('click', () => {
-    document.getElementById('auth-overlay').style.display = 'none';
-});
+document.getElementById('auth-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+document.getElementById('btn-close-auth').addEventListener('click', () => { document.getElementById('auth-overlay').style.display = 'none'; });
 document.getElementById('btn-confirm-edit').addEventListener('click', confirmEdit);
 document.getElementById('btn-close-edit').addEventListener('click', closeModal);
 document.getElementById('import-file').addEventListener('change', importConfig);
