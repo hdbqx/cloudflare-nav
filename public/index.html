@@ -54,7 +54,17 @@
                 <span class="sidebar-title">导航</span>
             </div>
             <nav id="sidebar-nav" class="sidebar-nav"></nav>
-            <div id="sidebar-footer" class="sidebar-footer"></div>
+            <div id="sidebar-footer" class="sidebar-footer">
+                <div class="sidebar-style-switcher">
+                    <button class="sidebar-style-btn active" data-style="0" title="经典图标样式">
+                        <i class="ri-grid-fill"></i><span>默认</span>
+                    </button>
+                    <button class="sidebar-style-btn" data-style="2" title="缤纷模式">
+                        <i class="ri-palette-fill"></i><span>缤纷</span>
+                    </button>
+                </div>
+                <div id="sidebar-admin-actions" class="sidebar-admin-section"></div>
+            </div>
         </aside>
 
         <!-- 主内容区域 -->
@@ -85,22 +95,6 @@
     
     <!-- 页脚缓存信息 -->
     <div id="footer-cache" class="footer-info"></div>
-    
-    <!-- 右上角固定面板（样式切换 + 管理员工具） -->
-    <div class="fab">
-        <div id="style-switcher" class="style-switcher-panel">
-            <div class="style-switcher-label">样式</div>
-            <button class="style-btn" id="style-btn-0" data-style="0" title="经典图标样式">
-                <i class="ri-grid-fill"></i>
-                <span>默认</span>
-            </button>
-            <button class="style-btn" id="style-btn-2" data-style="2" title="缤纷模式（自定义网格背景色）">
-                <i class="ri-palette-fill"></i>
-                <span>缤纷</span>
-            </button>
-        </div>
-        <div id="admin-tools" style="display:contents"></div>
-    </div>
     
     <!-- 隐藏的文件输入框（用于导入配置） -->
     <input type="file" id="import-file" accept=".json" style="display:none">

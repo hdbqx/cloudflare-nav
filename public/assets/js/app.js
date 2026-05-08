@@ -255,7 +255,7 @@ const getCleanAppData = () => {
 
 // ==================== 样式切换 ====================
 const initStyleSwitcher = () => {
-    document.querySelectorAll('.style-btn').forEach(btn => {
+    document.querySelectorAll('.sidebar-style-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const style = parseInt(btn.getAttribute('data-style'));
             setViewStyle(style);
@@ -277,7 +277,7 @@ const applyViewStyle = (style) => {
     if (style !== 0) {
         document.body.classList.add('view-style-' + style);
     }
-    document.querySelectorAll('.style-btn').forEach(btn => {
+    document.querySelectorAll('.sidebar-style-btn').forEach(btn => {
         btn.classList.toggle('active', parseInt(btn.getAttribute('data-style')) === style);
     });
 };
@@ -467,30 +467,15 @@ const init = async (forceRender = false) => {
 
 // ==================== 管理工具渲染 ====================
 const renderTools = () => {
-    const adminToolsContainer = document.getElementById('admin-tools');
-    const sidebarFooter = document.getElementById('sidebar-footer');
-    adminToolsContainer.innerHTML = '';
-    sidebarFooter.innerHTML = '';
-
-    const createFab = (text, bg, action) => {
-        const btn = document.createElement('div');
-        btn.className = 'fab-btn';
-        btn.innerText = text;
-        if (bg) {
-            btn.style.background = bg;
-            btn.style.color = 'white';
-            btn.style.border = 'none';
-        }
-        btn.addEventListener('click', action);
-        adminToolsContainer.appendChild(btn);
-    };
+    const sidebarAdminActions = document.getElementById('sidebar-admin-actions');
+    sidebarAdminActions.innerHTML = '';
 
     const createSidebarBtn = (icon, text, action) => {
         const btn = document.createElement('div');
         btn.className = 'sidebar-nav-item';
         btn.innerHTML = `<span class="nav-icon"><i class="${icon}"></i></span><span class="nav-label">${text}</span>`;
         btn.addEventListener('click', action);
-        sidebarFooter.appendChild(btn);
+        sidebarAdminActions.appendChild(btn);
     };
 
     if (isAdmin) {
@@ -503,15 +488,9 @@ const renderTools = () => {
         createSidebarBtn('ri-upload-line', '导入', () => document.getElementById('import-file').click());
         createSidebarBtn('ri-refresh-line', '默认', resetConfig);
         createSidebarBtn('ri-logout-box-r-line', '登出', doLogout);
-
-        // FAB 按钮精简（仅保留保存+登出+JSON）
-        createFab('JSON', '#6c5ce7', openMonacoEditor);
-        createFab('保存', 'var(--primary)', () => saveAll(false));
-        createFab('登出', '#e74c3c', doLogout);
     } else {
         document.title = "个人导航";
-        sidebarFooter.innerHTML = '';
-        createFab('管理', null, () => {
+        createSidebarBtn('ri-lock-line', '管理', () => {
             document.getElementById('auth-overlay').style.display = 'flex';
             setTimeout(() => document.getElementById('auth-input').focus(), 100);
         });
