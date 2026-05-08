@@ -1,8 +1,8 @@
 /**
  * ==========================================
- * style.css - 核心样式文件（升级版 v4）
- * 支持两种展示风格切换
- * Style 0: 经典图标网格（原版）
+ * style.css - 核心样式文件（升级版 v5）
+ * 左侧导航 + 连续滚动 + 视频导航 + Monaco Editor
+ * Style 0: 经典图标网格
  * Style 2: 缤纷模式（列表详情 + 用户自定义背景色）
  * ==========================================
  */
@@ -28,12 +28,16 @@
     /* 背景遮罩透明度 */
     --bg-overlay-opacity: 0.4;
 
-    /* 网站卡片图标尺寸（可自定义调整） */
+    /* 网站卡片图标尺寸 */
     --icon-size: 32px;
     --emoji-size: 32px;
+
+    /* 侧边栏尺寸 */
+    --sidebar-width: 200px;
+    --sidebar-collapsed-width: 60px;
 }
 
-/* ==================== 亮色模式（Light Theme） ==================== */
+/* ==================== 亮色模式 ==================== */
 body.light-theme {
     --glass: rgba(0, 0, 0, 0.08);
     --glass-hover: rgba(0, 0, 0, 0.15);
@@ -51,9 +55,22 @@ body.light-theme::before {
     background: rgba(255, 255, 255, var(--bg-overlay-opacity));
 }
 
-body.light-theme .tab-container {
-    background: rgba(255, 255, 255, 0.8);
-    border: 1px solid rgba(0, 0, 0, 0.1);
+body.light-theme .sidebar {
+    background: rgba(255, 255, 255, 0.85);
+    border-color: rgba(0, 0, 0, 0.08);
+}
+
+body.light-theme .sidebar-nav-item {
+    color: #555;
+}
+
+body.light-theme .sidebar-nav-item.active {
+    background: var(--primary);
+    color: white;
+}
+
+body.light-theme .sidebar-nav-item:hover:not(.active) {
+    background: rgba(0, 0, 0, 0.06);
 }
 
 body.light-theme .tab-btn {
@@ -119,7 +136,62 @@ body.light-theme .batch-btn.move {
     background: rgba(57, 157, 255, 0.9);
 }
 
-/* ==================== 简约模式（无模糊 - 提升低端设备性能） ==================== */
+body.light-theme .sidebar-header {
+    border-color: rgba(0, 0, 0, 0.08);
+}
+
+body.light-theme .sidebar-footer {
+    border-color: rgba(0, 0, 0, 0.08);
+}
+
+body.light-theme .category-section-title {
+    color: #333;
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+body.light-theme .sidebar-toggle {
+    background: rgba(255, 255, 255, 0.9);
+    color: #333;
+}
+
+body.light-theme .video-card {
+    background: rgba(255, 255, 255, 0.8);
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+body.light-theme .video-card .video-card-title {
+    color: #333;
+}
+
+body.light-theme .video-card .video-card-desc {
+    color: #777;
+}
+
+body.light-theme .video-modal-content {
+    background: rgba(255, 255, 255, 0.98);
+}
+
+body.light-theme .video-info h3 {
+    color: #333;
+}
+
+body.light-theme .video-info p {
+    color: #777;
+}
+
+body.light-theme .monaco-modal-content {
+    background: rgba(255, 255, 255, 0.98);
+}
+
+body.light-theme .monaco-header {
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+body.light-theme .monaco-header h4 {
+    color: #333;
+}
+
+/* ==================== 简约模式 ==================== */
 body.no-blur::before {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
@@ -130,7 +202,7 @@ body.no-blur.light-theme::before {
     background: rgba(255, 255, 255, var(--bg-overlay-opacity));
 }
 
-body.no-blur .tab-container {
+body.no-blur .sidebar {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
 }
@@ -151,7 +223,7 @@ body.no-blur body.view-style-2 .card.has-bg {
     -webkit-backdrop-filter: none !important;
 }
 
-/* 移动端减少阴影以提升性能 */
+/* 移动端减少阴影 */
 @media (max-width: 768px) {
     .card:hover {
         box-shadow: 0 0 10px rgba(57, 157, 255, 0.3), 0 0 20px rgba(57, 157, 255, 0.1);
@@ -183,7 +255,6 @@ body {
     transition: background-image 0.8s ease-in-out;
 }
 
-/* 高级磨砂玻璃模糊滤镜 */
 body::before {
     content: '';
     position: fixed;
@@ -197,50 +268,220 @@ body::before {
     z-index: -1;
 }
 
-/* ==================== 主容器 ==================== */
-.container {
-    max-width: 65rem;
-    margin: 0 auto;
-    padding: 150px 15px 100px;
-    text-align: center;
-    position: relative;
+/* ==================== 应用布局（左侧边栏 + 主内容） ==================== */
+.app-layout {
+    display: flex;
+    min-height: 100vh;
 }
 
-/* ==================== 分类标签栏 ==================== */
-.tab-container {
+/* ==================== 左侧导航栏 ==================== */
+.sidebar {
     position: fixed;
-    top: 2rem;
-    left: 50%;
-    transform: translateX(-50%);
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: var(--sidebar-width);
+    background: rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-right: 1px solid var(--glass-border);
+    display: flex;
+    flex-direction: column;
+    z-index: 100;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+}
+
+.sidebar-header {
     display: flex;
     align-items: center;
-    justify-content: flex-start;
-    gap: 12px;
-    margin-bottom: 0;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    padding: 12px 20px;
-    scrollbar-width: none;
-    background: rgba(0, 0, 0, 0.3);
-    backdrop-filter: blur(10px);
-    border-radius: 35px;
-    z-index: 100;
-    max-width: 95vw;
-}
-
-.tab-container::-webkit-scrollbar {
-    display: none;
-}
-
-.tabs {
-    display: flex;
-    flex-wrap: nowrap;
     gap: 10px;
+    padding: 20px 16px 16px;
+    border-bottom: 1px solid var(--glass-border);
+    flex-shrink: 0;
+}
+
+.sidebar-logo {
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.sidebar-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sidebar-nav {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 8px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.15) transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar {
+    width: 4px;
+}
+
+.sidebar-nav::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.15);
+    border-radius: 4px;
+}
+
+.sidebar-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border: 1px solid transparent;
+    margin-bottom: 3px;
+    user-select: none;
+}
+
+.sidebar-nav-item .nav-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+    width: 22px;
+    text-align: center;
+}
+
+.sidebar-nav-item .nav-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sidebar-nav-item:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-nav-item.active {
+    background: var(--primary);
+    color: white;
+    border-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 2px 12px rgba(57, 157, 255, 0.35);
+}
+
+.sidebar-nav-item.hidden-item {
+    opacity: 0.4;
+    text-decoration: line-through;
+}
+
+.sidebar-footer {
+    padding: 10px 8px;
+    border-top: 1px solid var(--glass-border);
+    flex-shrink: 0;
+}
+
+.sidebar-footer .manage-cat-btn {
+    width: 100%;
+    text-align: left;
+    padding: 8px 14px;
+    font-size: 13px;
+}
+
+/* 移动端侧边栏切换按钮 */
+.sidebar-toggle {
+    display: none;
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 150;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.sidebar-toggle:hover {
+    background: var(--primary);
+}
+
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 99;
+}
+
+.sidebar-overlay.visible {
+    display: block;
+}
+
+/* ==================== 主内容区域 ==================== */
+.main-content {
+    margin-left: var(--sidebar-width);
+    flex: 1;
+    min-height: 100vh;
+    padding: 20px 20px 80px;
+}
+
+.grid-container {
+    max-width: 72rem;
     margin: 0 auto;
 }
 
-/* ==================== 分类按钮样式 ==================== */
+/* ==================== 分类区块（连续滚动） ==================== */
+.category-section {
+    margin-bottom: 16px;
+    scroll-margin-top: 10px;
+}
+
+.category-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+    padding: 8px 4px 10px;
+    border-bottom: 1px solid var(--glass-border);
+    margin-bottom: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: inherit;
+}
+
+.category-section-title .cat-icon {
+    font-size: 20px;
+}
+
+.category-section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--glass-border);
+    margin-left: 8px;
+}
+
+/* ==================== 分类按钮样式（保留用于管理弹窗内） ==================== */
 .tab-btn {
     white-space: nowrap;
     padding: 8px 22px;
@@ -282,23 +523,19 @@ body::before {
 
 /* ==================== 导航网格布局（Style 0 默认） ==================== */
 .nav-grid {
-    display: none;
+    display: grid;
     gap: 15px;
     margin: 0 auto;
     width: 100%;
     grid-template-columns: repeat(auto-fill, minmax(var(--card-w, 85px), 1fr));
-    animation: fadeInUp 0.6s ease-out;
-}
-
-.nav-grid.active {
-    display: grid;
+    animation: fadeInUp 0.4s ease-out;
 }
 
 /* 淡入上浮动画 */
 @keyframes fadeInUp {
     from {
         opacity: 0;
-        transform: translateY(20px);
+        transform: translateY(15px);
     }
     to {
         opacity: 1;
@@ -314,8 +551,8 @@ body::before {
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     position: relative;
     cursor: pointer;
-    min-height: 85px; /* 确保这里是固定的 85px */
-    height: 85px; /* 确保这里是固定的 85px */
+    min-height: 85px;
+    height: 85px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -326,9 +563,8 @@ body::before {
 .card:hover {
     background: var(--glass-hover);
     transform: translateY(-2px);
-    /* 使用主题色 var(--primary) 产生光晕效果 */
     box-shadow: 0 0 15px rgba(57, 157, 255, 0.5), 0 0 30px rgba(57, 157, 255, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.3); /* 强化边缘发光感 */
+    border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .card.sortable-ghost {
@@ -465,10 +701,10 @@ body::before {
     justify-content: center;
 }
 
-/* ==================== 右上角固定面板（样式切换 + 管理员工具） ==================== */
+/* ==================== 右上角固定面板 ==================== */
 .fab {
     position: fixed;
-    top: 6rem;
+    top: 16px;
     right: 16px;
     display: flex;
     flex-direction: column;
@@ -627,7 +863,7 @@ input::placeholder {
     color: rgba(255, 255, 255, 0.5);
 }
 
-/* ==================== 复选框和单选框样式 ==================== */
+/* ==================== 复选框和单选框 ==================== */
 input[type="checkbox"],
 input[type="radio"] {
     margin: 0;
@@ -712,21 +948,23 @@ input[type="radio"] {
 #skeleton-screen {
     display: none;
     width: 100%;
-    margin-top: 40px;
+    max-width: 72rem;
+    margin: 0 auto;
+    padding-top: 10px;
 }
 
 .skel-tabs {
     display: flex;
-    justify-content: center;
-    gap: 12px;
-    margin-bottom: 35px;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+    width: 120px;
 }
 
 .skel-tab {
-    width: 80px;
+    width: 100%;
     height: 35px;
-    border-radius: 40px;
+    border-radius: 10px;
     background: rgba(255, 255, 255, 0.05);
 }
 
@@ -735,7 +973,6 @@ input[type="radio"] {
     gap: 15px;
     margin: 0 auto;
     width: 100%;
-    max-width: 65rem;
     grid-template-columns: repeat(auto-fill, minmax(var(--card-w, 85px), 1fr));
 }
 
@@ -773,6 +1010,7 @@ input[type="radio"] {
     color: rgba(255, 255, 255, 0.4);
     font-size: 11px;
     pointer-events: none;
+    z-index: 50;
 }
 
 /* ==================== 拖拽排序相关 ==================== */
@@ -922,19 +1160,8 @@ body.light-theme .emoji-suggestion.selected {
     background: rgba(57, 157, 255, 0.3);
 }
 
-/* ==================== 布局容器 ==================== */
-#layout-wrapper {
-    display: block;
-    width: 100%;
-}
-
-
-/* ==================================================================================
-   缤纷模式 — 列表详情模式 + 自定义网格背景色
-   高宽比与默认样式完全一致（正方形），背景色由用户自定义
-   ================================================================================== */
-
-body.view-style-2 .nav-grid.active {
+/* ==================== 缤纷模式 ==================== */
+body.view-style-2 .nav-grid {
     grid-template-columns: repeat(auto-fill, minmax(var(--card-w, 85px), 1fr));
     gap: 15px;
 }
@@ -948,7 +1175,6 @@ body.view-style-2 .card {
     transition: all 0.25s ease;
 }
 
-/* 有自定义背景色的卡片 */
 body.view-style-2 .card.has-bg {
     background: var(--card-bg-color, rgba(255,255,255,0.15));
     backdrop-filter: blur(12px);
@@ -957,13 +1183,11 @@ body.view-style-2 .card.has-bg {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-/* 悬浮时光泽效果 */
 body.view-style-2 .card.has-bg:hover {
     transform: translateY(-2px);
-    /* 这里的光晕会叠加在卡片原有阴影上，使其更有厚度 */
     box-shadow: 
         0 8px 25px rgba(0, 0, 0, 0.3), 
-        0 0 15px var(--card-bg-color, rgba(255,255,255,0.2)), /* 随卡片颜色的光晕 */
+        0 0 15px var(--card-bg-color, rgba(255,255,255,0.2)),
         0 0 30px rgba(255, 255, 255, 0.1);
 }
 
@@ -972,7 +1196,6 @@ body.view-style-2 .card:not(.has-bg):hover {
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-color: rgba(255, 255, 255, 0.4);
-    /* 白色/浅灰色柔和光晕 */
     box-shadow: 
         0 8px 20px rgba(0, 0, 0, 0.3),
         0 0 15px rgba(255, 255, 255, 0.15);
@@ -987,7 +1210,6 @@ body.view-style-2 .card a {
     gap: 10px;
 }
 
-/* 缤纷模式: 图标区域 — 无背景，透明底 */
 body.view-style-2 .icon-wrapper {
     width: calc(var(--icon-size) + 10px);
     height: calc(var(--icon-size) + 10px);
@@ -1013,7 +1235,6 @@ body.view-style-2 .card .emoji-icon {
     font-size: calc(var(--emoji-size) + 4px);
 }
 
-/* 缤纷模式: 文字区域 */
 body.view-style-2 .card-text-block {
     display: flex;
     flex-direction: column;
@@ -1041,7 +1262,6 @@ body.view-style-2 .card h3 {
     min-height: unset;
 }
 
-/* 缤纷模式 tooltip */
 body.view-style-2 .card[data-tooltip]::after {
     left: 50%;
     transform: translateX(-50%) translateY(10px);
@@ -1055,8 +1275,314 @@ body.view-style-2 .card[data-tooltip]::before {
     display: none;
 }
 
+/* ==================== 视频卡片网格 ==================== */
+.video-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin: 0 auto;
+    width: 100%;
+}
 
-/* ==================== 跟随系统偏好（亮色/暗色模式自动切换） ==================== */
+.video-card {
+    background: var(--glass);
+    border-radius: 12px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 1px solid var(--glass-border);
+    position: relative;
+}
+
+.video-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4), 0 0 15px rgba(57, 157, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.video-card-cover {
+    position: relative;
+    width: 100%;
+    padding-top: 56.25%; /* 16:9 */
+    background: rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+.video-card-cover img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.5s ease;
+}
+
+.video-card:hover .video-card-cover img {
+    transform: scale(1.05);
+}
+
+.video-card-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    z-index: 2;
+    backdrop-filter: blur(4px);
+}
+
+.video-card-badge.bilibili {
+    background: rgba(251, 114, 153, 0.9);
+    color: white;
+}
+
+.video-card-badge.youtube {
+    background: rgba(255, 0, 0, 0.9);
+    color: white;
+}
+
+.video-play-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0);
+    transition: background 0.3s;
+    z-index: 1;
+}
+
+.video-card:hover .video-play-overlay {
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.video-play-btn {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transform: scale(0.75);
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.video-play-btn i {
+    font-size: 24px;
+    color: #333;
+    margin-left: 2px;
+}
+
+.video-card:hover .video-play-btn {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.video-card-body {
+    padding: 10px 12px;
+}
+
+.video-card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-bottom: 4px;
+}
+
+.video-card-desc {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 视频封面加载失败占位 */
+.video-card-cover-fallback {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(57, 157, 255, 0.2), rgba(139, 92, 246, 0.2));
+}
+
+.video-card-cover-fallback i {
+    font-size: 40px;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+/* ==================== 视频播放弹窗 ==================== */
+.video-modal-content {
+    background: rgba(20, 20, 20, 0.98);
+    width: 90%;
+    max-width: 900px;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    position: relative;
+}
+
+.video-close-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    transition: all 0.2s;
+}
+
+.video-close-btn:hover {
+    background: rgba(231, 76, 60, 0.8);
+    transform: scale(1.1);
+}
+
+.video-player-wrapper {
+    width: 100%;
+    padding-top: 56.25%; /* 16:9 */
+    position: relative;
+    background: #000;
+}
+
+.video-player-wrapper iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+.video-info {
+    padding: 16px 20px;
+}
+
+.video-info h3 {
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.video-info p {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 13px;
+    margin-bottom: 10px;
+}
+
+.video-ext-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--primary);
+    font-size: 13px;
+    text-decoration: none;
+    transition: opacity 0.2s;
+}
+
+.video-ext-link:hover {
+    opacity: 0.8;
+}
+
+/* ==================== Monaco Editor 弹窗 ==================== */
+.monaco-modal-content {
+    background: rgba(20, 20, 20, 0.98);
+    width: 92%;
+    max-width: 1000px;
+    height: 80vh;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+}
+
+.monaco-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+}
+
+.monaco-header h4 {
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.monaco-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.monaco-action-btn {
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.08);
+    color: #ccc;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s;
+}
+
+.monaco-action-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+}
+
+.monaco-action-btn.primary {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+
+.monaco-action-btn.primary:hover {
+    opacity: 0.9;
+}
+
+.monaco-action-btn.close:hover {
+    background: rgba(231, 76, 60, 0.8);
+    border-color: rgba(231, 76, 60, 0.8);
+    color: white;
+}
+
+.monaco-container {
+    flex: 1;
+    min-height: 0;
+}
+
+/* ==================== 跟随系统偏好 ==================== */
 @media (prefers-color-scheme: light) {
     body:not(.light-theme):not(.dark-theme) {
         --glass: rgba(0, 0, 0, 0.08);
@@ -1075,14 +1601,22 @@ body.view-style-2 .card[data-tooltip]::before {
         background: rgba(255, 255, 255, var(--bg-overlay-opacity));
     }
 
-    body:not(.light-theme):not(.dark-theme) .tab-container {
-        background: rgba(255, 255, 255, 0.8);
-        border: 1px solid rgba(0, 0, 0, 0.1);
+    body:not(.light-theme):not(.dark-theme) .sidebar {
+        background: rgba(255, 255, 255, 0.85);
+        border-color: rgba(0, 0, 0, 0.08);
     }
 
-    body:not(.light-theme):not(.dark-theme) .tab-btn {
-        color: #333;
-        border-color: rgba(0, 0, 0, 0.1);
+    body:not(.light-theme):not(.dark-theme) .sidebar-nav-item {
+        color: #555;
+    }
+
+    body:not(.light-theme):not(.dark-theme) .sidebar-nav-item.active {
+        background: var(--primary);
+        color: white;
+    }
+
+    body:not(.light-theme):not(.dark-theme) .sidebar-nav-item:hover:not(.active) {
+        background: rgba(0, 0, 0, 0.06);
     }
 
     body:not(.light-theme):not(.dark-theme) .card {
@@ -1122,36 +1656,38 @@ body.view-style-2 .card[data-tooltip]::before {
     :root {
         --card-w: 80px;
     }
+
+    .video-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
 }
 
 @media (max-width: 768px) {
     :root {
         --card-w: 75px;
+        --sidebar-width: 220px;
     }
 
-    .tab-container {
-        top: 1rem;
-        padding: 8px 14px;
-        gap: 6px;
-        max-width: 95vw;
-        justify-content: flex-start;
+    /* 移动端：侧边栏变为滑出式 */
+    .sidebar {
+        transform: translateX(-100%);
     }
 
-    .tab-btn {
-        padding: 6px 14px;
-        font-size: 14px;
-        flex-shrink: 0;
+    .sidebar.open {
+        transform: translateX(0);
     }
 
-    .container {
-        padding-top: 100px;
+    .sidebar-toggle {
+        display: flex;
     }
 
-    body.view-style-2 .nav-grid.active {
-        gap: 12px;
+    .main-content {
+        margin-left: 0;
+        padding: 60px 12px 80px;
     }
 
     .fab {
+        top: 12px;
         right: 10px;
     }
 
@@ -1168,6 +1704,28 @@ body.view-style-2 .card[data-tooltip]::before {
         width: 40px;
         height: 40px;
     }
+
+    body.view-style-2 .nav-grid {
+        gap: 12px;
+    }
+
+    .video-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .video-modal-content {
+        width: 96%;
+        max-width: none;
+    }
+
+    .monaco-modal-content {
+        width: 98%;
+        height: 90vh;
+    }
+
+    .category-section-title {
+        font-size: 14px;
+    }
 }
 
 @media (max-width: 480px) {
@@ -1175,14 +1733,8 @@ body.view-style-2 .card[data-tooltip]::before {
         --card-w: 70px;
     }
 
-    .container {
-        padding: 80px 10px 80px;
-    }
-
-    .tab-container {
-        top: 0.5rem;
-        padding: 6px 10px;
-        border-radius: 0;
+    .main-content {
+        padding: 60px 10px 80px;
     }
 
     .batch-actions-bar {

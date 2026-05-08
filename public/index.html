@@ -23,6 +23,9 @@
     <!-- 拖拽排序库 -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js" defer></script>
     
+    <!-- Monaco Editor -->
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js" defer></script>
+    
     <!-- 样式文件 -->
     <link rel="stylesheet" href="/assets/css/style.css">
 </head>
@@ -36,36 +39,48 @@
         <div id="global-loading-text" style="color: #fff; font-size: 15px; font-weight: bold; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">正在处理中...</div>
     </div>
 
-    <div class="container">
-        <!-- 骨架屏（加载占位） -->
-        <div id="skeleton-screen">
-            <div class="skel-tabs">
-                <div class="skel-tab skel-anim"></div>
-                <div class="skel-tab skel-anim"></div>
-                <div class="skel-tab skel-anim"></div>
+    <!-- 移动端汉堡菜单按钮 -->
+    <button id="sidebar-toggle" class="sidebar-toggle" aria-label="打开导航菜单">
+        <i class="ri-menu-line"></i>
+    </button>
+    <!-- 移动端遮罩 -->
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+    <div class="app-layout">
+        <!-- 左侧导航栏 -->
+        <aside id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <span class="sidebar-logo">🌐</span>
+                <span class="sidebar-title">导航</span>
             </div>
-            <div class="skel-grid">
-                <div class="skel-card skel-anim"></div>
-                <div class="skel-card skel-anim"></div>
-                <div class="skel-card skel-anim"></div>
-                <div class="skel-card skel-anim"></div>
-                <div class="skel-card skel-anim"></div>
-                <div class="skel-card skel-anim"></div>
-            </div>
-        </div>
+            <nav id="sidebar-nav" class="sidebar-nav"></nav>
+            <div id="sidebar-footer" class="sidebar-footer"></div>
+        </aside>
 
         <!-- 主内容区域 -->
-        <div id="main-content" style="display: none;">
-            <div id="layout-wrapper">
-                <!-- 分类标签栏 -->
-                <div class="tab-container">
-                    <div id="tabs" class="tabs"></div>
-                    <div id="cat-manage-area"></div>
+        <main class="main-content">
+            <!-- 骨架屏（加载占位） -->
+            <div id="skeleton-screen">
+                <div class="skel-tabs">
+                    <div class="skel-tab skel-anim"></div>
+                    <div class="skel-tab skel-anim"></div>
+                    <div class="skel-tab skel-anim"></div>
                 </div>
-                <!-- 网站卡片容器 -->
-                <div id="grid-container"></div>
+                <div class="skel-grid">
+                    <div class="skel-card skel-anim"></div>
+                    <div class="skel-card skel-anim"></div>
+                    <div class="skel-card skel-anim"></div>
+                    <div class="skel-card skel-anim"></div>
+                    <div class="skel-card skel-anim"></div>
+                    <div class="skel-card skel-anim"></div>
+                </div>
             </div>
-        </div>
+
+            <!-- 导航内容 -->
+            <div id="main-content" style="display: none;">
+                <div id="grid-container" class="grid-container"></div>
+            </div>
+        </main>
     </div>
     
     <!-- 页脚缓存信息 -->
@@ -73,7 +88,6 @@
     
     <!-- 右上角固定面板（样式切换 + 管理员工具） -->
     <div class="fab">
-        <!-- 样式切换按钮组（始终显示） -->
         <div id="style-switcher" class="style-switcher-panel">
             <div class="style-switcher-label">样式</div>
             <button class="style-btn" id="style-btn-0" data-style="0" title="经典图标样式">
@@ -85,7 +99,6 @@
                 <span>缤纷</span>
             </button>
         </div>
-        <!-- 管理员工具按钮 -->
         <div id="admin-tools" style="display:contents"></div>
     </div>
     
@@ -109,6 +122,38 @@
             <h4 id="edit-title" style="margin-bottom:20px; font-size:16px">编辑详情</h4>
             <div id="edit-form-body"></div>
             <button id="btn-confirm-edit" class="tab-btn active" style="width:100%; margin-top:10px">确认保存修改</button>
+        </div>
+    </div>
+
+    <!-- 视频播放弹窗 -->
+    <div id="video-modal" class="modal">
+        <div class="video-modal-content">
+            <button id="btn-close-video" class="video-close-btn"><i class="ri-close-line"></i></button>
+            <div class="video-player-wrapper">
+                <iframe id="video-iframe" src="" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" frameborder="0"></iframe>
+            </div>
+            <div class="video-info">
+                <h3 id="video-title"></h3>
+                <p id="video-desc"></p>
+                <a id="video-link" href="#" target="_blank" class="video-ext-link">
+                    <i class="ri-external-link-line"></i> 在原平台打开
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Monaco Editor 弹窗 -->
+    <div id="monaco-modal" class="modal">
+        <div class="monaco-modal-content">
+            <div class="monaco-header">
+                <h4><i class="ri-code-s-slash-line"></i> JSON 数据编辑器</h4>
+                <div class="monaco-actions">
+                    <button id="btn-monaco-format" class="monaco-action-btn" title="格式化"><i class="ri-align-left"></i> 格式化</button>
+                    <button id="btn-monaco-save" class="monaco-action-btn primary" title="保存"><i class="ri-save-line"></i> 保存</button>
+                    <button id="btn-close-monaco" class="monaco-action-btn close" title="关闭"><i class="ri-close-line"></i></button>
+                </div>
+            </div>
+            <div id="monaco-container" class="monaco-container"></div>
         </div>
     </div>
 
