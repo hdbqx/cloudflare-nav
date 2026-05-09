@@ -23,6 +23,48 @@ let themeMode = localStorage.getItem('nav_theme_mode') || 'auto';
 let simpleMode = localStorage.getItem('nav_simple_mode') === 'true';
 let monacoEditor = null;
 
+// ==================== Bilibili 封面缓存 ====================
+const bilibiliCoverCache = new Map();
+
+/**
+ * 异步获取 Bilibili 视频封面 URL
+ * @param {string} bvid - BV 号
+ * @returns {Promise<string|null>} 封面图片 URL
+ */
+const fetchBilibiliCover = async (bvid) => {
+    if (bilibiliCoverCache.has(bvid)) return bilibiliCoverCache.get(bvid);
+    try {
+        const res = await fetch(`https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`);
+        const data = await res.json();
+        if (data.code === 0 && data.data && data.data.pic) {
+            bilibiliCoverCache.set(bvid, data.data.pic);
+            return data.data.pic;
+        }
+    } catch (e) {
+        console.warn('Bilibili 封面获取失败:', bvid, e);
+    }
+    return null;
+};
+
+/**
+ * 批量异步加载视频卡片封面（在 DOM 插入后调用）
+ * @param {HTMLElement} container - 包含 video-card 的容器
+ */
+const loadVideoCovers = async (container) => {
+    const coverSlots = container.querySelectorAll('.video-cover-slot[data-bvid]');
+    for (const slot of coverSlots) {
+        const bvid = slot.getAttribute('data-bvid');
+        const coverUrl = await fetchBilibiliCover(bvid);
+        if (coverUrl) {
+            slot.innerHTML = `<img src="${coverUrl}" alt="" loading="lazy" referrerpolicy="no-referrer"
+                onerror="this.style.display='none'; this.nextElementSibling && (this.nextElementSibling.style.display='flex');">`;
+            // 隐藏 fallback
+            const fallback = slot.querySelector('.video-card-cover-fallback');
+            if (fallback) fallback.style.display = 'none';
+        }
+    }
+};
+
 // ==================== 视频平台检测 ====================
 
 /**
@@ -322,6 +364,8 @@ const toggleSimpleMode = () => {
 const updateGridWidth = () => {
     const width = (appData.settings && appData.settings.cardWidth) ? appData.settings.cardWidth : 85;
     document.documentElement.style.setProperty('--card-w', width + 'px');
+    // 卡片高度跟随宽度设置，保持视觉一致
+    document.documentElement.style.setProperty('--card-h', width + 'px');
 };
 
 const showLoader = (text = '正在处理中...') => {
@@ -607,7 +651,7 @@ const renderNav = () => {
 
     // 常去虚拟分类
     if (hasFrequent) {
-        cats.unshift({ id: 'VIRTUAL_FREQ', name: '常去', icon: '⭐', hidden: false });
+        cats.unshift({ id: 'VIRTUAL_FREQ', name: '常去网站', icon: '⭐', hidden: false });
     }
 
     if (cats.length > 0 && !activeCatId) activeCatId = cats[0].id;
@@ -687,6 +731,9 @@ const renderNav = () => {
             }
 
             section.appendChild(videoGrid);
+
+            // 异步加载 Bilibili 封面
+            loadVideoCovers(videoGrid);
 
             // 视频分类拖拽排序
             if (isAdmin && typeof Sortable !== 'undefined' && cat.id !== 'VIRTUAL_FREQ') {
@@ -867,15 +914,18 @@ const buildVideoCard = (item, videoInfo) => {
     }
 
     // 封面区域
-    const coverUrl = videoInfo?.type === 'bilibili'
-        ? `https://i0.hdslb.com/bfs/archive/${videoInfo.bvid}.jpg@480w_270h_1c.webp`
-        : videoInfo?.type === 'youtube'
-            ? `https://img.youtube.com/vi/${videoInfo.videoId}/mqdefault.jpg`
-            : '';
-
-    const coverHtml = coverUrl
-        ? `<img src="${coverUrl}" alt="${safeTitle}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'video-card-cover-fallback\\'><i class=\\'ri-play-circle-line\\'></i></div>';">`
-        : `<div class="video-card-cover-fallback"><i class="ri-play-circle-line"></i></div>`;
+    let coverHtml = '';
+    if (videoInfo?.type === 'bilibili') {
+        // Bilibili：使用异步加载封面（需要 API 获取真实 URL）
+        coverHtml = `<div class="video-cover-slot" data-bvid="${videoInfo.bvid}">
+            <div class="video-card-cover-fallback"><i class="ri-play-circle-line"></i></div>
+        </div>`;
+    } else if (videoInfo?.type === 'youtube') {
+        coverHtml = `<img src="https://img.youtube.com/vi/${videoInfo.videoId}/mqdefault.jpg" alt="${safeTitle}" loading="lazy"
+            onerror="this.style.display='none';">`;
+    } else {
+        coverHtml = `<div class="video-card-cover-fallback"><i class="ri-play-circle-line"></i></div>`;
+    }
 
     // 管理员操作
     let adminHtml = '';
