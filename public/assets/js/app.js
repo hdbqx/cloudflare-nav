@@ -1298,7 +1298,7 @@ const manageCats = () => {
 
     document.getElementById('edit-form-body').innerHTML = `
         <div class="form-row" style="margin-bottom: 10px;">
-            <label>网格宽度</label><input type="number" id="setting-width" value="${currentWidth}"><span style="color:#666; margin-left:10px;">px</span>
+            <label>网格高度</label><input type="number" id="setting-width" value="${currentWidth}"><span style="color:#666; margin-left:10px;">px</span>
         </div>
         <div class="form-row" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 10px;">
             <label>自定义背景</label>
