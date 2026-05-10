@@ -209,7 +209,7 @@ body.no-blur body.view-style-2 .card.has-bg {
 
 /* 移动端减少阴影 */
 @media (max-width: 768px) {
-    .card:hover {
+    .card:not([data-color-ready]):hover {
         box-shadow: none;
     }
 
@@ -539,7 +539,7 @@ body::before {
 /* ==================== 卡片样式（Style 0 默认） ==================== */
 .card {
     background: var(--glass);
-    border: none;
+    border: 1px solid transparent;
     border-radius: var(--radius);
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     position: relative;
@@ -556,6 +556,164 @@ body::before {
 .card:hover {
     background: var(--glass-hover);
     transform: translateY(-2px);
+}
+
+/* ==================== 卡片悬停彩色光晕效果 ==================== */
+
+/* 模糊图标背景 — 扩散光 */
+.card .card-glow-bg {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.card .card-glow-bg img,
+.card .card-glow-bg .glow-emoji {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: blur(20px) saturate(3) brightness(1.2) contrast(1.3);
+    scale: 2.8;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    will-change: transform, filter;
+}
+
+.card .card-glow-bg .glow-emoji {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 60px;
+    scale: 2.8;
+    filter: blur(18px) saturate(4) brightness(1.3);
+    color: var(--icon-color, #3b82f6);
+}
+
+/* 亮色模式下光晕更柔和 */
+body.light-theme .card .card-glow-bg img,
+body.light-theme .card .card-glow-bg .glow-emoji {
+    filter: blur(22px) saturate(2) brightness(1.1) contrast(1.1);
+    opacity: 0;
+}
+
+/* 悬停时显示模糊背景 */
+.card[data-color-ready]:hover .card-glow-bg img,
+.card[data-color-ready]:hover .card-glow-bg .glow-emoji {
+    opacity: 0.15;
+}
+
+body.light-theme .card[data-color-ready]:hover .card-glow-bg img,
+body.light-theme .card[data-color-ready]:hover .card-glow-bg .glow-emoji {
+    opacity: 0.08;
+}
+
+/* 悬停边框 + 阴影 — 轮廓光 */
+.card[data-color-ready]:hover {
+    border-color: rgba(var(--icon-color-rgb, 59, 130, 246), 0.35);
+    box-shadow:
+        0 0 0 1px rgba(var(--icon-color-rgb, 59, 130, 246), 0.2),
+        0 8px 25px -5px rgba(var(--icon-color-rgb, 59, 130, 246), 0.15),
+        0 4px 10px -4px rgba(var(--icon-color-rgb, 59, 130, 246), 0.08);
+}
+
+/* 亮色模式下阴影更浅 */
+body.light-theme .card[data-color-ready]:hover {
+    border-color: rgba(var(--icon-color-rgb, 59, 130, 246), 0.2);
+    box-shadow:
+        0 0 0 1px rgba(var(--icon-color-rgb, 59, 130, 246), 0.1),
+        0 6px 20px -5px rgba(var(--icon-color-rgb, 59, 130, 246), 0.1);
+}
+
+/* 鼠标跟随径向渐变 — 聚光效果（放在 glow-bg 容器内，避免与 tooltip 伪元素冲突） */
+.card .card-glow-bg::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    background: radial-gradient(
+        800px circle
+        at calc(var(--pointer-x, 0.5) * 100%) calc(var(--pointer-y, 0.5) * 100%),
+        rgba(var(--icon-color-rgb, 59, 130, 246), 0.1) 0%,
+        rgba(var(--icon-color-rgb, 59, 130, 246), 0.04) 20%,
+        transparent 40%
+    );
+}
+
+.card[data-color-ready]:hover .card-glow-bg::after {
+    opacity: 1;
+}
+
+body.light-theme .card .card-glow-bg::after {
+    background: radial-gradient(
+        800px circle
+        at calc(var(--pointer-x, 0.5) * 100%) calc(var(--pointer-y, 0.5) * 100%),
+        rgba(var(--icon-color-rgb, 59, 130, 246), 0.06) 0%,
+        rgba(var(--icon-color-rgb, 59, 130, 246), 0.02) 20%,
+        transparent 40%
+    );
+}
+
+/* 缤纷模式下的光晕适配 */
+body.view-style-2 .card[data-color-ready]:hover {
+    border-color: rgba(var(--icon-color-rgb, 59, 130, 246), 0.35);
+    box-shadow:
+        0 0 0 1px rgba(var(--icon-color-rgb, 59, 130, 246), 0.2),
+        0 8px 25px -5px rgba(var(--icon-color-rgb, 59, 130, 246), 0.18);
+}
+
+body.view-style-2 .card.has-bg[data-color-ready]:hover {
+    border-color: rgba(var(--icon-color-rgb, 59, 130, 246), 0.3);
+    box-shadow:
+        0 0 0 1px rgba(var(--icon-color-rgb, 59, 130, 246), 0.15),
+        0 6px 20px -3px rgba(var(--icon-color-rgb, 59, 130, 246), 0.15);
+}
+
+/* 卡片内容层确保在光晕之上 */
+.card a {
+    position: relative;
+    z-index: 2;
+}
+
+.card .admin-actions {
+    z-index: 3;
+}
+
+/* 尊重用户动画偏好 */
+@media (prefers-reduced-motion: reduce) {
+    .card .card-glow-bg img,
+    .card .card-glow-bg .glow-emoji {
+        transition: none;
+    }
+    .card[data-color-ready]:hover {
+        transition: none;
+    }
+}
+
+/* 移动端减少光晕强度 */
+@media (max-width: 768px) {
+    .card .card-glow-bg img,
+    .card .card-glow-bg .glow-emoji {
+        scale: 2;
+        filter: blur(15px) saturate(2.5) brightness(1.1);
+    }
+    .card[data-color-ready]:hover .card-glow-bg img,
+    .card[data-color-ready]:hover .card-glow-bg .glow-emoji {
+        opacity: 0.1;
+    }
+    .card[data-color-ready]:hover {
+        box-shadow:
+            0 0 0 1px rgba(var(--icon-color-rgb, 59, 130, 246), 0.12),
+            0 4px 15px -3px rgba(var(--icon-color-rgb, 59, 130, 246), 0.1);
+    }
 }
 
 .card.sortable-ghost {

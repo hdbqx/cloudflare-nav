@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ==========================================
  * app.js - 核心前端逻辑（升级版 v5）
  * CloudNav 个人导航页主程序
@@ -545,22 +545,26 @@ const buildCardInnerHTML = (item, adminHtml, style) => {
     const safeIcon = utils.escapeHTML(item.icon);
     const isImgIcon = item.icon && item.icon.startsWith('http');
     const iconHtml = isImgIcon
-        ? `<img src="${safeIcon}" loading="lazy" ${fallbackAttr}>`
-        : `<span class="emoji-icon">${safeIcon || '🔗'}</span>`;
+        ? `<img src="" loading="lazy" >`
+        : `<span class="emoji-icon"></span>`;
 
     const safeUrl = utils.escapeHTML(item.url);
     const safeTitle = utils.escapeHTML(item.title);
 
+    // 光晕背景层：用图标图片或 emoji 作为模糊扩散光源
+    const glowBgHtml = isImgIcon
+        ? `<div class="card-glow-bg"><img src="" loading="lazy" aria-hidden="true"></div>`
+        : `<div class="card-glow-bg"><div class="glow-emoji"></div></div>`;
+
     if (style === 2) {
-        return `${adminHtml}<a href="${safeUrl}" target="_blank">
-            <div class="icon-wrapper">${iconHtml}</div>
-            <div class="card-text-block"><h3>${safeTitle}</h3></div>
+        return `<a href="" target="_blank">
+            <div class="icon-wrapper"></div>
+            <div class="card-text-block"><h3></h3></div>
         </a>`;
     } else {
-        return `${adminHtml}<a href="${safeUrl}" target="_blank"><div class="icon-wrapper">${iconHtml}</div><h3>${safeTitle}</h3></a>`;
+        return `<a href="" target="_blank"><div class="icon-wrapper"></div><h3></h3></a>`;
     }
 };
-
 // ==================== 批量选择功能 ====================
 const toggleCardSelection = (id) => {
     if (selectedCardIds.has(id)) selectedCardIds.delete(id);
@@ -893,6 +897,8 @@ const renderNav = () => {
 
     // 滚动监听：自动高亮当前可见分类
     initScrollSpy();
+    // 卡片光晕效果初始化
+    initCardGlow(container);
 };
 
 // ==================== 视频卡片构建 ====================
@@ -984,6 +990,64 @@ const buildVideoCard = (item, videoInfo) => {
     return card;
 };
 
+// ==================== 卡片悬停光晕效果 ====================
+const initCardGlow = (container) => {
+    const cards = container.querySelectorAll('.card[data-id]');
+    const extractor = window.colorExtractor;
+    if (!extractor) return;
+
+    cards.forEach(card => {
+        const item = appData.items.find(i => i.id === card.getAttribute('data-id'));
+        if (!item) return;
+
+        const iconSrc = item.icon;
+        const isImgIcon = iconSrc && iconSrc.startsWith('http');
+        const title = item.title || '';
+
+        // 提取颜色并注入 CSS 变量
+        if (isImgIcon) {
+            extractor.extractColorFromImage(iconSrc).then(color => {
+                if (color) {
+                    card.style.setProperty('--icon-color', color.hex);
+                    card.style.setProperty('--icon-color-rgb', color.rgb);
+                    card.setAttribute('data-color-ready', '');
+                }
+            });
+        } else {
+            // Emoji 或无图标：从文本生成颜色
+            const color = extractor.generateColorFromText(iconSrc || title);
+            if (color) {
+                card.style.setProperty('--icon-color', color.hex);
+                card.style.setProperty('--icon-color-rgb', color.rgb);
+                card.setAttribute('data-color-ready', '');
+            }
+        }
+
+        // 鼠标跟踪（RAF 节流）
+        let rafId = null;
+        card.addEventListener('mousemove', (e) => {
+            if (rafId) return;
+            rafId = requestAnimationFrame(() => {
+                const rect = card.getBoundingClientRect();
+                const x = (e.clientX - rect.left) / rect.width;
+                const y = (e.clientY - rect.top) / rect.height;
+                card.style.setProperty('--pointer-x', x.toFixed(3));
+                card.style.setProperty('--pointer-y', y.toFixed(3));
+                rafId = null;
+            });
+        });
+
+        card.addEventListener('mouseleave', () => {
+            if (rafId) {
+                cancelAnimationFrame(rafId);
+                rafId = null;
+            }
+            // 重置鼠标位置到中心
+            card.style.setProperty('--pointer-x', '0.5');
+            card.style.setProperty('--pointer-y', '0.5');
+        });
+    });
+};
 // ==================== 滚动监听（自动高亮侧边栏） ====================
 let scrollSpyInitialized = false;
 const initScrollSpy = () => {
