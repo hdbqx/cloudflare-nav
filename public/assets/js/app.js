@@ -540,32 +540,32 @@ const renderTools = () => {
 };
 
 // ==================== 卡片 HTML 生成 ====================
-const buildCardInnerHTML = (item, adminHtml, style) => {
-    let fallbackAttr = ``onerror="this.outerHTML='<span class=\\'emoji-icon\\'>'+window.utils.getRandomEmoji()+'</span>';"``;
-    const safeIcon = utils.escapeHTML(item.icon);
-    const isImgIcon = item.icon && item.icon.startsWith('http');
-    const iconHtml = isImgIcon
-        ? ``<img src="${safeIcon}" loading="lazy" ${fallbackAttr}>``
-        : ``<span class="emoji-icon">${safeIcon || '🔗'}</span>``;
-
-    const safeUrl = utils.escapeHTML(item.url);
-    const safeTitle = utils.escapeHTML(item.title);
-
-    // 光晕背景层：用图标图片或 emoji 作为模糊扩散光源
-    const glowBgHtml = isImgIcon
-        ? ``<div class="card-glow-bg"><img src="${safeIcon}" loading="lazy" aria-hidden="true"></div>``
-        : ``<div class="card-glow-bg"><div class="glow-emoji">${safeIcon || '🔗'}</div></div>``;
-
-    if (style === 2) {
-        return ``${glowBgHtml}${adminHtml}<a href="${safeUrl}" target="_blank">
-            <div class="icon-wrapper">${iconHtml}</div>
-            <div class="card-text-block"><h3>${safeTitle}</h3></div>
-        </a>``;
-    } else {
-        return ``${glowBgHtml}${adminHtml}<a href="${safeUrl}" target="_blank"><div class="icon-wrapper">${iconHtml}</div><h3>${safeTitle}</h3></a>``;
-    }
-};
-
+const buildCardInnerHTML = (item, adminHtml, style) => {
+    let fallbackAttr = `onerror="this.outerHTML='<span class=\'emoji-icon\'>'+window.utils.getRandomEmoji()+'</span>';"`;
+    const safeIcon = utils.escapeHTML(item.icon);
+    const isImgIcon = item.icon && item.icon.startsWith('http');
+    const iconHtml = isImgIcon
+        ? `<img src="${safeIcon}" loading="lazy" ${fallbackAttr}>`
+        : `<span class="emoji-icon">${safeIcon || '\u{1F517}'}</span>`;
+
+    const safeUrl = utils.escapeHTML(item.url);
+    const safeTitle = utils.escapeHTML(item.title);
+
+    // 光晕背景层：用图标图片或 emoji 作为模糊扩散光源
+    const glowBgHtml = isImgIcon
+        ? `<div class="card-glow-bg"><img src="${safeIcon}" loading="lazy" aria-hidden="true"></div>`
+        : `<div class="card-glow-bg"><div class="glow-emoji">${safeIcon || '\u{1F517}'}</div></div>`;
+
+    if (style === 2) {
+        return `${glowBgHtml}${adminHtml}<a href="${safeUrl}" target="_blank">
+            <div class="icon-wrapper">${iconHtml}</div>
+            <div class="card-text-block"><h3>${safeTitle}</h3></div>
+        </a>`;
+    } else {
+        return `${glowBgHtml}${adminHtml}<a href="${safeUrl}" target="_blank"><div class="icon-wrapper">${iconHtml}</div><h3>${safeTitle}</h3></a>`;
+    }
+};
+
 // ==================== 批量选择功能 ====================
 const toggleCardSelection = (id) => {
     if (selectedCardIds.has(id)) selectedCardIds.delete(id);

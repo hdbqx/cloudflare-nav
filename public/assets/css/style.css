@@ -538,6 +538,8 @@ body::before {
 
 /* ==================== 卡片样式（Style 0 默认） ==================== */
 .card {
+    --icon-color: #3b82f6;
+    --icon-color-rgb: 59, 130, 246;
     background: var(--glass);
     border: 1px solid transparent;
     border-radius: var(--radius);
@@ -559,13 +561,6 @@ body::before {
 }
 
 /* ==================== 卡片悬停彩色光晕效果 ==================== */
-
-/* 默认颜色变量（未提取到颜色时回退） */
-.card {
-    --icon-color: #3b82f6;
-    --icon-color-rgb: 59, 130, 246;
-    border-color: transparent;
-}
 
 /* 模糊图标背景 — 扩散光（参考 favorite-main icon-bg） */
 .card .card-glow-bg {
@@ -749,7 +744,7 @@ body.view-style-2 .card.has-bg[data-color-ready]:hover {
 }
 
 /* 卡片内容层确保在光晕之上 */
-.card a {
+.card > a {
     position: relative;
     z-index: 2;
 }
