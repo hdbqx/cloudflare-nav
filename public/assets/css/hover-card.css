@@ -1,0 +1,182 @@
+/* ==========================================
+ * hover-card.css - 悬停光晕效果
+ * 三层光效：模糊图标背景 + 彩色边框阴影 + 鼠标跟随径向渐变
+ * 颜色由 colorExtractor.js 从图标提取后注入 CSS 变量
+ *
+ * 注意：卡片已有 data-tooltip 使用 ::after 和 ::before，
+ * 所以鼠标跟随渐变使用独立的 .icon-glow 层（JS动态创建）
+ * ========================================== */
+
+/* ---- 卡片基础设置 ---- */
+.card {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.25s ease-out;
+  --icon-color: #399dff;
+  --icon-color-rgb: 57, 157, 255;
+  border-color: transparent !important;
+}
+
+.card[data-color-ready] {
+  border-color: transparent !important;
+}
+
+/* ---- ① 模糊图标背景（扩散光） ---- */
+.card .icon-bg {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  transform: translateZ(0);
+  filter: blur(20px) saturate(3) brightness(1.2) contrast(1.3);
+  translate: calc(var(--pointer-x, -10) * 40%) calc(var(--pointer-y, -10) * 40%);
+  scale: 2.8;
+  opacity: 0.15;
+  will-change: transform, filter;
+  transition: opacity 0.3s ease-out;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.card:not(:hover):not(:focus-within) .icon-bg {
+  opacity: calc(0.15 * 0.3);
+  transition: opacity 0.4s ease-out;
+}
+
+.card .icon-bg img {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  opacity: 0.8;
+}
+
+.card .icon-bg span {
+  color: var(--icon-color);
+  opacity: 0.3;
+  font-size: 48px;
+  font-weight: bold;
+}
+
+.card .icon-main {
+  position: relative;
+  z-index: 2;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card:hover .icon-main {
+  transform: scale(1.05);
+}
+
+/* ---- ② 悬停边框 + 阴影（轮廓光） ---- */
+.card[data-color-ready]:hover {
+  border-color: rgba(var(--icon-color-rgb), 0.5) !important;
+  box-shadow:
+    0 0 0 1px rgba(var(--icon-color-rgb), 0.3),
+    0 10px 25px -5px rgba(var(--icon-color-rgb), 0.2),
+    0 4px 10px -4px rgba(var(--icon-color-rgb), 0.1);
+  transform: translateY(-2px);
+}
+
+/* ---- ③ 鼠标跟随径向渐变（聚光效果） ---- */
+/* 使用独立 .icon-glow 元素（由 JS 创建），避免与 tooltip 的 ::before/::after 冲突 */
+.card .icon-glow {
+  position: absolute;
+  pointer-events: none;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.3s ease-out;
+  z-index: 1;
+  background: radial-gradient(
+    800px circle at calc(var(--pointer-x, 0.5) * 100%) calc(var(--pointer-y, 0.5) * 100%),
+    rgba(var(--icon-color-rgb), 0.1) 0%,
+    rgba(var(--icon-color-rgb), 0.04) 20%,
+    transparent 40%
+  );
+}
+
+.card[data-color-ready]:hover .icon-glow {
+  opacity: 1;
+}
+
+/* ---- 无颜色就绪时的蓝色回退 ---- */
+.card:not([data-color-ready]):hover {
+  border-color: rgba(57, 157, 255, 0.4) !important;
+  box-shadow:
+    0 0 0 1px rgba(57, 157, 255, 0.2),
+    0 10px 25px -5px rgba(57, 157, 255, 0.15);
+  transform: translateY(-2px);
+}
+
+/* ---- 亮色模式适配 ---- */
+body.light-theme .card .icon-bg {
+  filter: blur(18px) saturate(2.5) brightness(1.1) contrast(1.2);
+  opacity: 0.12;
+}
+
+body.light-theme .card:not(:hover):not(:focus-within) .icon-bg {
+  opacity: calc(0.12 * 0.3);
+}
+
+body.light-theme .card[data-color-ready]:hover {
+  border-color: rgba(var(--icon-color-rgb), 0.4) !important;
+  box-shadow:
+    0 0 0 1px rgba(var(--icon-color-rgb), 0.2),
+    0 8px 20px -5px rgba(var(--icon-color-rgb), 0.15),
+    0 2px 6px -2px rgba(var(--icon-color-rgb), 0.08);
+}
+
+/* ---- 性能优化：减少动画 ---- */
+@media (prefers-reduced-motion: reduce) {
+  .card .icon-bg {
+    will-change: auto;
+    transition: none;
+  }
+  .card .icon-main {
+    transition: none;
+  }
+  .card:hover .icon-main {
+    transform: none;
+  }
+}
+
+/* ---- 移动端降级 ---- */
+@media (max-width: 768px) {
+  .card .icon-bg {
+    filter: blur(15px) saturate(2) brightness(1.1);
+    scale: 2.2;
+    opacity: 0.1;
+  }
+  .card .icon-glow {
+    background: radial-gradient(
+      600px circle at calc(var(--pointer-x, 0.5) * 100%) calc(var(--pointer-y, 0.5) * 100%),
+      rgba(var(--icon-color-rgb), 0.08) 0%,
+      transparent 30%
+    );
+  }
+}
+
+/* ---- Style 2 (缤纷模式) 适配 ---- */
+body.view-style-2 .card .icon-bg img {
+  width: 60px;
+  height: 60px;
+}
+
+body.view-style-2 .card .icon-bg span {
+  font-size: 36px;
+}
+
+/* ---- 覆盖原有 Style 2 的 box-shadow ---- */
+body.view-style-2 .card.has-bg:hover {
+  box-shadow:
+    0 0 0 1px rgba(var(--icon-color-rgb), 0.3),
+    0 10px 25px -5px rgba(var(--icon-color-rgb), 0.2),
+    0 4px 10px -4px rgba(var(--icon-color-rgb), 0.1) !important;
+}
+
+body.view-style-2 .card:not(.has-bg):hover {
+  box-shadow:
+    0 0 0 1px rgba(var(--icon-color-rgb), 0.3),
+    0 10px 25px -5px rgba(var(--icon-color-rgb), 0.2),
+    0 4px 10px -4px rgba(var(--icon-color-rgb), 0.1) !important;
+}

@@ -7,7 +7,6 @@
  * Style 2: 缤纷模式
  * ==========================================
  */
-
 // ==================== 全局变量定义 ====================
 let appData = { settings: { cardWidth: 85 }, categories: [], items: [] };
 let activeCatId = '';
@@ -22,10 +21,8 @@ let selectedCardIds = new Set();
 let themeMode = localStorage.getItem('nav_theme_mode') || 'auto';
 let simpleMode = localStorage.getItem('nav_simple_mode') === 'true';
 let monacoEditor = null;
-
 // ==================== Bilibili 封面缓存 ====================
 const bilibiliCoverCache = new Map();
-
 /**
  * 异步获取 Bilibili 视频封面 URL
  * @param {string} bvid - BV 号
@@ -45,7 +42,6 @@ const fetchBilibiliCover = async (bvid) => {
     }
     return null;
 };
-
 /**
  * 批量异步加载视频卡片封面（在 DOM 插入后调用）
  * @param {HTMLElement} container - 包含 video-card 的容器
@@ -64,9 +60,7 @@ const loadVideoCovers = async (container) => {
         }
     }
 };
-
 // ==================== 视频平台检测 ====================
-
 /**
  * 检测URL是否为视频平台链接
  * @returns {{ type: 'bilibili'|'youtube', videoId: string, bvid?: string, aid?: string } | null}
@@ -99,7 +93,6 @@ const detectVideoPlatform = (url) => {
     } catch (e) { }
     return null;
 };
-
 /**
  * 生成视频嵌入 iframe URL
  */
@@ -118,14 +111,12 @@ const getVideoEmbedUrl = (videoInfo) => {
     }
     return '';
 };
-
 /**
  * 判断分类是否为视频分类（名称包含"视频"或图标为特定emoji）
  */
 const isVideoCategory = (cat) => {
     return cat.name.includes('视频') || cat.icon === '🎬' || cat.icon === '📺' || cat.icon === '🎥' || cat._isVideo;
 };
-
 // ==================== 安全与工具函数 ====================
 const hashPassword = async (password) => {
     const msgBuffer = new TextEncoder().encode(password);
@@ -133,7 +124,6 @@ const hashPassword = async (password) => {
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 };
-
 // ==================== 初始化入口 ====================
 document.addEventListener('DOMContentLoaded', () => {
     // 注册 Service Worker
@@ -143,11 +133,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 .catch(err => console.log('SW 注册失败:', err));
         });
     }
-
     initThemeMode();
     initSimpleMode();
     initSidebar();
-
     // 全局监听卡片点击
     document.getElementById('grid-container').addEventListener('click', (e) => {
         const card = e.target.closest('.card');
@@ -159,29 +147,24 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem('nav_clicks', JSON.stringify(clicks));
         }
     });
-
     initStyleSwitcher();
     initVideoModal();
     initMonacoModal();
     init();
 });
-
 // ==================== 侧边栏初始化 ====================
 const initSidebar = () => {
     const toggle = document.getElementById('sidebar-toggle');
     const overlay = document.getElementById('sidebar-overlay');
     const sidebar = document.getElementById('sidebar');
-
     toggle.addEventListener('click', () => {
         sidebar.classList.toggle('open');
         overlay.classList.toggle('visible');
     });
-
     overlay.addEventListener('click', () => {
         sidebar.classList.remove('open');
         overlay.classList.remove('visible');
     });
-
     // 点击侧边栏导航项后关闭（移动端）
     document.getElementById('sidebar-nav').addEventListener('click', (e) => {
         const item = e.target.closest('.sidebar-nav-item');
@@ -191,13 +174,11 @@ const initSidebar = () => {
         }
     });
 };
-
 // ==================== 视频播放弹窗 ====================
 const initVideoModal = () => {
     document.getElementById('btn-close-video').addEventListener('click', closeVideoModal);
     // 不允许点击弹窗外区域关闭，只能通过关闭按钮退出
 };
-
 const openVideoModal = (item, videoInfo) => {
     const iframe = document.getElementById('video-iframe');
     iframe.src = getVideoEmbedUrl(videoInfo);
@@ -208,13 +189,11 @@ const openVideoModal = (item, videoInfo) => {
     extLink.style.display = item.url ? 'inline-flex' : 'none';
     document.getElementById('video-modal').style.display = 'flex';
 };
-
 const closeVideoModal = () => {
     const iframe = document.getElementById('video-iframe');
     iframe.src = '';
     document.getElementById('video-modal').style.display = 'none';
 };
-
 // ==================== Monaco Editor 弹窗 ====================
 const initMonacoModal = () => {
     document.getElementById('btn-close-monaco').addEventListener('click', closeMonacoModal);
@@ -228,15 +207,12 @@ const initMonacoModal = () => {
     });
     document.getElementById('btn-monaco-save').addEventListener('click', saveMonacoData);
 };
-
 const openMonacoEditor = () => {
     document.getElementById('monaco-modal').style.display = 'flex';
-
     if (monacoEditor) {
         monacoEditor.setValue(JSON.stringify(getCleanAppData(), null, 2));
         return;
     }
-
     require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
     require(['vs/editor/editor.main'], () => {
         monacoEditor = monaco.editor.create(document.getElementById('monaco-container'), {
@@ -259,7 +235,6 @@ const openMonacoEditor = () => {
         });
     });
 };
-
 const saveMonacoData = () => {
     if (!monacoEditor) return;
     try {
@@ -281,18 +256,15 @@ const saveMonacoData = () => {
         showToast('JSON 解析错误: ' + e.message, '#e74c3c');
     }
 };
-
 const closeMonacoModal = () => {
     document.getElementById('monaco-modal').style.display = 'none';
 };
-
 const getCleanAppData = () => {
     const data = { ...appData };
     delete data.isAdmin;
     delete data.bgUrl;
     return data;
 };
-
 // ==================== 样式切换 ====================
 const initStyleSwitcher = () => {
     document.querySelectorAll('.sidebar-style-btn').forEach(btn => {
@@ -303,7 +275,6 @@ const initStyleSwitcher = () => {
     });
     applyViewStyle(currentViewStyle);
 };
-
 const setViewStyle = (style) => {
     if (currentViewStyle === style) return;
     currentViewStyle = style;
@@ -311,7 +282,6 @@ const setViewStyle = (style) => {
     applyViewStyle(style);
     renderNav();
 };
-
 const applyViewStyle = (style) => {
     document.body.classList.remove('view-style-0', 'view-style-2');
     if (style !== 0) {
@@ -321,10 +291,8 @@ const applyViewStyle = (style) => {
         btn.classList.toggle('active', parseInt(btn.getAttribute('data-style')) === style);
     });
 };
-
 // ==================== 主题切换功能 ====================
 const initThemeMode = () => { applyThemeMode(); };
-
 const applyThemeMode = () => {
     document.body.classList.remove('light-theme', 'dark-theme');
     if (themeMode === 'light') {
@@ -333,7 +301,6 @@ const applyThemeMode = () => {
         document.body.classList.add('dark-theme');
     }
 };
-
 const toggleThemeMode = () => {
     if (themeMode === 'auto') themeMode = 'light';
     else if (themeMode === 'light') themeMode = 'dark';
@@ -342,24 +309,20 @@ const toggleThemeMode = () => {
     applyThemeMode();
     showToast(`主题: ${getThemeModeLabel()}`);
 };
-
 const getThemeModeLabel = () => {
     const labels = { auto: '跟随系统', light: '亮色', dark: '暗色' };
     return labels[themeMode] || '跟随系统';
 };
-
 // ==================== 简约模式 ====================
 const initSimpleMode = () => {
     if (simpleMode) document.body.classList.add('no-blur');
 };
-
 const toggleSimpleMode = () => {
     simpleMode = !simpleMode;
     localStorage.setItem('nav_simple_mode', simpleMode);
     document.body.classList.toggle('no-blur', simpleMode);
     showToast(simpleMode ? '已开启简约模式' : '已关闭简约模式');
 };
-
 // ==================== 核心函数 ====================
 const updateGridWidth = () => {
     const width = (appData.settings && appData.settings.cardWidth) ? appData.settings.cardWidth : 85;
@@ -367,16 +330,13 @@ const updateGridWidth = () => {
     // 卡片高度跟随宽度设置，保持视觉一致
     document.documentElement.style.setProperty('--card-h', width + 'px');
 };
-
 const showLoader = (text = '正在处理中...') => {
     document.getElementById('global-loading-text').innerText = text;
     document.getElementById('global-loading-overlay').style.display = 'flex';
 };
-
 const hideLoader = () => {
     document.getElementById('global-loading-overlay').style.display = 'none';
 };
-
 const showToast = (msg = "操作成功", color = "#27ae60") => {
     const toast = document.getElementById('toast');
     toast.innerText = msg;
@@ -385,12 +345,10 @@ const showToast = (msg = "操作成功", color = "#27ae60") => {
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toast.classList.remove('show'), 2500);
 };
-
 const toggleSkeleton = (show) => {
     document.getElementById('skeleton-screen').style.display = show ? 'block' : 'none';
     document.getElementById('main-content').style.display = show ? 'none' : 'block';
 };
-
 const loadBackground = async (url) => {
     if (!url) return;
     try {
@@ -416,7 +374,6 @@ const loadBackground = async (url) => {
         img.onload = () => { document.body.style.backgroundImage = `url('${url}')`; };
     }
 };
-
 const applyBackgroundConfig = () => {
     const customBg = appData.settings?.bgUrl;
     if (customBg) {
@@ -430,13 +387,11 @@ const applyBackgroundConfig = () => {
         loadBackground(appData.bgUrl);
     }
 };
-
 const init = async (forceRender = false) => {
     let fetchUrl = '/api/config';
     const gridContainer = document.getElementById('grid-container');
     const localCache = localStorage.getItem('nav_app_data');
     let initialIsAdmin = isAdmin;
-
     if (localCache) {
         try {
             appData = JSON.parse(localCache);
@@ -456,13 +411,11 @@ const init = async (forceRender = false) => {
     } else {
         toggleSkeleton(true);
     }
-
     try {
         const res = await fetch(fetchUrl, {
             headers: sysToken ? { 'Authorization': sysToken } : {},
             cache: 'no-store'
         });
-
         if (!res.ok) {
             if (res.status === 401) {
                 localStorage.removeItem('nav_token');
@@ -471,30 +424,24 @@ const init = async (forceRender = false) => {
             }
             throw new Error(`HTTP Error ${res.status}`);
         }
-
         const newData = await res.json();
         const isDataChanged = !localCache ||
             JSON.stringify(appData.items) !== JSON.stringify(newData.items) ||
             JSON.stringify(appData.categories) !== JSON.stringify(newData.categories);
-
         appData = newData;
         isAdmin = appData.isAdmin || false;
         localStorage.setItem('nav_app_data', JSON.stringify(appData));
-
         updateGridWidth();
         const isAdminChanged = initialIsAdmin !== isAdmin;
         applyBackgroundConfig();
-
         if (forceRender || isDataChanged || isAdminChanged || !localCache) {
             toggleSkeleton(false);
             renderTools();
             renderNav();
         }
-
         if (appData.lastUpdated) {
             document.getElementById('footer-cache').innerText = '最后同步：' + utils.escapeHTML(appData.lastUpdated);
         }
-
     } catch (e) {
         console.error("后台数据更新失败", e);
         if (!localCache) {
@@ -506,12 +453,10 @@ const init = async (forceRender = false) => {
         }
     }
 };
-
 // ==================== 管理工具渲染 ====================
 const renderTools = () => {
     const sidebarAdminActions = document.getElementById('sidebar-admin-actions');
     sidebarAdminActions.innerHTML = '';
-
     const createSidebarBtn = (icon, text, action) => {
         const btn = document.createElement('div');
         btn.className = 'sidebar-nav-item';
@@ -519,7 +464,6 @@ const renderTools = () => {
         btn.addEventListener('click', action);
         sidebarAdminActions.appendChild(btn);
     };
-
     if (isAdmin) {
         document.title = "管理后台";
         // 侧边栏底部管理按钮
@@ -538,29 +482,30 @@ const renderTools = () => {
         });
     }
 };
-
 // ==================== 卡片 HTML 生成 ====================
 const buildCardInnerHTML = (item, adminHtml, style) => {
-    let fallbackAttr = `onerror="this.outerHTML='<span class=\\'emoji-icon\\'>'+window.utils.getRandomEmoji()+'</span>';"`;
+    let fallbackAttr = `onerror="this.outerHTML='<span class=\'emoji-icon\'>'+window.utils.getRandomEmoji()+'</span>';'"`;
     const safeIcon = utils.escapeHTML(item.icon);
     const isImgIcon = item.icon && item.icon.startsWith('http');
     const iconHtml = isImgIcon
         ? `<img src="${safeIcon}" loading="lazy" ${fallbackAttr}>`
         : `<span class="emoji-icon">${safeIcon || '🔗'}</span>`;
-
+    // 光晕效果：构建 icon-bg 模糊背景层
+    const iconBgHtml = isImgIcon
+        ? `<div class="icon-bg"><img src="${safeIcon}" alt=""></div>`
+        : `<div class="icon-bg"><span>${safeIcon || '🔗'}</span></div>`;
+    const iconGlowHtml = '<div class="icon-glow"></div>';
     const safeUrl = utils.escapeHTML(item.url);
     const safeTitle = utils.escapeHTML(item.title);
-
     if (style === 2) {
-        return `${adminHtml}<a href="${safeUrl}" target="_blank">
+        return `${adminHtml}${iconBgHtml}${iconGlowHtml}<a href="${safeUrl}" target="_blank" class="icon-main">
             <div class="icon-wrapper">${iconHtml}</div>
             <div class="card-text-block"><h3>${safeTitle}</h3></div>
         </a>`;
     } else {
-        return `${adminHtml}<a href="${safeUrl}" target="_blank"><div class="icon-wrapper">${iconHtml}</div><h3>${safeTitle}</h3></a>`;
+        return `${adminHtml}${iconBgHtml}${iconGlowHtml}<a href="${safeUrl}" target="_blank" class="icon-main"><div class="icon-wrapper">${iconHtml}</div><h3>${safeTitle}</h3></a>`;
     }
 };
-
 // ==================== 批量选择功能 ====================
 const toggleCardSelection = (id) => {
     if (selectedCardIds.has(id)) selectedCardIds.delete(id);
@@ -568,7 +513,6 @@ const toggleCardSelection = (id) => {
     updateBatchUI();
     renderNav();
 };
-
 const updateBatchUI = () => {
     let batchBar = document.querySelector('.batch-actions-bar');
     if (selectedCardIds.size > 0) {
@@ -592,13 +536,11 @@ const updateBatchUI = () => {
         if (batchBar) batchBar.classList.remove('visible');
     }
 };
-
 const clearSelection = () => {
     selectedCardIds.clear();
     updateBatchUI();
     renderNav();
 };
-
 const batchDelete = () => {
     if (selectedCardIds.size === 0) return;
     if (!confirm(`确定删除选中的 ${selectedCardIds.size} 个网站？`)) return;
@@ -607,7 +549,6 @@ const batchDelete = () => {
     saveAll(false);
     showToast('批量删除成功');
 };
-
 const showBatchMoveDialog = () => {
     if (selectedCardIds.size === 0) return;
     const cats = appData.categories;
@@ -636,27 +577,21 @@ const showBatchMoveDialog = () => {
         showToast(`已移动到目标分类`);
     });
 };
-
 // ==================== 渲染导航内容（连续滚动） ====================
 const renderNav = () => {
     const sidebarNav = document.getElementById('sidebar-nav');
     const container = document.getElementById('grid-container');
     sidebarNav.innerHTML = '';
     container.innerHTML = '';
-
     const clickData = JSON.parse(localStorage.getItem('nav_clicks') || '{}');
     const hasFrequent = Object.keys(clickData).length > 0;
-
     let cats = isAdmin ? [...appData.categories] : appData.categories.filter(c => !c.hidden);
-
     // 常去虚拟分类
     if (hasFrequent) {
         cats.unshift({ id: 'VIRTUAL_FREQ', name: '常去网站', icon: '⭐', hidden: false });
     }
-
     if (cats.length > 0 && !activeCatId) activeCatId = cats[0].id;
     if (!cats.find(c => c.id === activeCatId) && cats.length > 0) activeCatId = cats[0].id;
-
     // 渲染侧边栏导航项
     cats.forEach((cat) => {
         const item = document.createElement('div');
@@ -674,22 +609,18 @@ const renderNav = () => {
         });
         sidebarNav.appendChild(item);
     });
-
     // 连续滚动：渲染所有分类区块
     cats.forEach((cat) => {
         const section = document.createElement('div');
         section.className = 'category-section';
         section.id = 'section-' + cat.id;
-
         // 分类标题
         const title = document.createElement('div');
         title.className = 'category-section-title';
         title.innerHTML = `<span class="cat-icon">${utils.escapeHTML(cat.icon)}</span> ${utils.escapeHTML(cat.name)}`;
         section.appendChild(title);
-
         // 判断是否为视频分类
         const catIsVideo = isVideoCategory(cat);
-
         // 获取该分类下的项目
         let catItems = [];
         if (cat.id === 'VIRTUAL_FREQ') {
@@ -701,18 +632,15 @@ const renderNav = () => {
         } else {
             catItems = appData.items.filter(i => i.catId === cat.id && (isAdmin || !i.hidden));
         }
-
         if (catIsVideo) {
             // 视频分类：使用视频卡片网格
             const videoGrid = document.createElement('div');
             videoGrid.className = 'video-grid';
-
             catItems.forEach((item) => {
                 const videoInfo = detectVideoPlatform(item.url);
                 const videoCard = buildVideoCard(item, videoInfo);
                 videoGrid.appendChild(videoCard);
             });
-
             // 管理员模式：新增卡片
             if (isAdmin && cat.id !== 'VIRTUAL_FREQ') {
                 const addCard = document.createElement('div');
@@ -729,12 +657,9 @@ const renderNav = () => {
                 });
                 videoGrid.appendChild(addCard);
             }
-
             section.appendChild(videoGrid);
-
             // 异步加载 Bilibili 封面
             loadVideoCovers(videoGrid);
-
             // 视频分类拖拽排序
             if (isAdmin && typeof Sortable !== 'undefined' && cat.id !== 'VIRTUAL_FREQ') {
                 new Sortable(videoGrid, {
@@ -764,7 +689,6 @@ const renderNav = () => {
             const grid = document.createElement('div');
             grid.className = 'nav-grid';
             grid.id = 'grid-' + cat.id;
-
             grid.addEventListener('click', (e) => {
                 const actionBtn = e.target.closest('.action-mini');
                 if (actionBtn) {
@@ -783,27 +707,21 @@ const renderNav = () => {
                     openItemEdit('', cat.id);
                 }
             });
-
             const fragment = document.createDocumentFragment();
-
             catItems.forEach((item) => {
                 const card = document.createElement('div');
                 card.className = 'card' + (item.hidden ? ' hidden-item' : '');
                 card.setAttribute('data-id', utils.escapeHTML(item.id));
-
                 // 检测是否有视频链接（非视频分类中的视频链接）
                 const videoInfo = detectVideoPlatform(item.url);
-
                 if (currentViewStyle === 2 && item.bgColor) {
                     card.style.setProperty('--card-bg-color', item.bgColor);
                     card.classList.add('has-bg');
                 }
-
                 const safeDesc = utils.escapeHTML(item.desc || '');
                 const safeTitle = utils.escapeHTML(item.title);
                 const tooltip = safeDesc ? `${safeTitle}\n${safeDesc}` : safeTitle;
                 card.setAttribute('data-tooltip', tooltip);
-
                 let adminHtml = '';
                 if (isAdmin && cat.id !== 'VIRTUAL_FREQ') {
                     adminHtml = `<div class="admin-actions">
@@ -813,9 +731,7 @@ const renderNav = () => {
                         <button class="action-mini" data-action="delete" data-id="${utils.escapeHTML(item.id)}"><i class="ri-delete-bin-line"></i></button>
                     </div>`;
                 }
-
                 card.innerHTML = buildCardInnerHTML(item, adminHtml, currentViewStyle);
-
                 // 如果检测到视频链接，点击卡片打开视频播放弹窗
                 if (videoInfo) {
                     const linkEl = card.querySelector('a');
@@ -827,13 +743,11 @@ const renderNav = () => {
                         });
                     }
                 }
-
                 if (selectedCardIds.has(item.id)) {
                     card.classList.add('selected');
                 }
                 fragment.appendChild(card);
             });
-
             // 新增卡片按钮
             if (isAdmin && cat.id !== 'VIRTUAL_FREQ') {
                 const addCard = document.createElement('div');
@@ -849,10 +763,8 @@ const renderNav = () => {
                 }
                 fragment.appendChild(addCard);
             }
-
             grid.appendChild(fragment);
             section.appendChild(grid);
-
             // 批量选择事件
             if (isAdmin && cat.id !== 'VIRTUAL_FREQ') {
                 grid.querySelectorAll('.batch-select-btn').forEach(btn => {
@@ -864,7 +776,6 @@ const renderNav = () => {
                     });
                 });
             }
-
             // 拖拽排序
             if (isAdmin && typeof Sortable !== 'undefined' && cat.id !== 'VIRTUAL_FREQ') {
                 new Sortable(grid, {
@@ -887,24 +798,23 @@ const renderNav = () => {
                 });
             }
         }
-
         container.appendChild(section);
     });
-
     // 滚动监听：自动高亮当前可见分类
     initScrollSpy();
+    // 应用光晕效果：提取图标颜色 + 鼠标追踪
+    if (window.colorExtractor) {
+        window.colorExtractor.applyToAllCards(false);
+    }
 };
-
 // ==================== 视频卡片构建 ====================
 const buildVideoCard = (item, videoInfo) => {
     const card = document.createElement('div');
     card.className = 'video-card';
     card.setAttribute('data-id', utils.escapeHTML(item.id));
-
     const safeTitle = utils.escapeHTML(item.title);
     const safeDesc = utils.escapeHTML(item.desc || '');
     const safeUrl = utils.escapeHTML(item.url);
-
     // 平台标识
     let badgeHtml = '';
     if (videoInfo) {
@@ -912,7 +822,6 @@ const buildVideoCard = (item, videoInfo) => {
         const badgeText = videoInfo.type === 'bilibili' ? 'Bilibili' : 'YouTube';
         badgeHtml = `<div class="video-card-badge ${badgeClass}">${badgeText}</div>`;
     }
-
     // 封面区域
     let coverHtml = '';
     if (videoInfo?.type === 'bilibili') {
@@ -926,7 +835,6 @@ const buildVideoCard = (item, videoInfo) => {
     } else {
         coverHtml = `<div class="video-card-cover-fallback"><i class="ri-play-circle-line"></i></div>`;
     }
-
     // 管理员操作
     let adminHtml = '';
     if (isAdmin) {
@@ -936,7 +844,6 @@ const buildVideoCard = (item, videoInfo) => {
             <button class="action-mini" data-action="delete" data-id="${utils.escapeHTML(item.id)}"><i class="ri-delete-bin-line"></i></button>
         </div>`;
     }
-
     card.innerHTML = `
         ${adminHtml}
         <div class="video-card-cover">
@@ -951,7 +858,6 @@ const buildVideoCard = (item, videoInfo) => {
             <div class="video-card-desc">${safeDesc || (videoInfo ? (videoInfo.type === 'bilibili' ? 'Bilibili' : 'YouTube') : '')}</div>
         </div>
     `;
-
     // 点击播放视频
     card.addEventListener('click', (e) => {
         if (e.target.closest('.admin-actions')) {
@@ -975,27 +881,22 @@ const buildVideoCard = (item, videoInfo) => {
             window.open(item.url, '_blank');
         }
     });
-
     if (item.hidden) {
         card.style.opacity = '0.3';
         card.style.filter = 'grayscale(1)';
     }
-
     return card;
 };
-
 // ==================== 滚动监听（自动高亮侧边栏） ====================
 let scrollSpyInitialized = false;
 const initScrollSpy = () => {
     // 使用 IntersectionObserver 替代 scroll 监听以提升性能
     const sections = document.querySelectorAll('.category-section');
     if (sections.length === 0) return;
-
     // 清理旧的 observer
     if (window._scrollSpyObserver) {
         window._scrollSpyObserver.disconnect();
     }
-
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
@@ -1011,33 +912,26 @@ const initScrollSpy = () => {
         rootMargin: '-20% 0px -60% 0px',
         threshold: 0
     });
-
     sections.forEach(section => observer.observe(section));
     window._scrollSpyObserver = observer;
 };
-
 // ==================== 编辑相关函数 ====================
 const debouncedHandleUrlInput = utils.debounce((val) => handleUrlInput(val), 500);
-
 const openItemEdit = (id, catId) => {
     editingType = 'items';
     editingId = id;
-
     const item = id
         ? appData.items.find(i => i.id === id)
         : { id: 'i' + Date.now(), title: '', url: '', desc: '', icon: '', catId: catId };
-
     const safeUrl = utils.escapeHTML(item.url);
     const safeTitle = utils.escapeHTML(item.title);
     const safeIcon = utils.escapeHTML(item.icon);
     const safeDesc = utils.escapeHTML(item.desc || '');
     const safeBgColor = utils.escapeHTML(item.bgColor || '');
-
     // 检测当前是否为视频分类
     const currentCat = appData.categories.find(c => c.id === (item.catId || catId));
     const isVideoCat = currentCat && isVideoCategory(currentCat);
     const videoInfo = detectVideoPlatform(item.url);
-
     document.getElementById('edit-title').innerText = id ? '编辑网站' : '新增网站';
     document.getElementById('edit-form-body').innerHTML = `
         <div class="form-row"><label>网站 URL</label><input id="f-url" value="${safeUrl}"></div>
@@ -1099,7 +993,6 @@ const openItemEdit = (id, catId) => {
             <select id="f-cat">${appData.categories.map(c => `<option value="${utils.escapeHTML(c.id)}" ${c.id === item.catId ? 'selected' : ''}>${utils.escapeHTML(c.name)}</option>`).join('')}</select>
         </div>
     `;
-
     // 背景色取色器与输入框联动
     const colorInput = document.getElementById('f-bg-color');
     const colorText = document.getElementById('f-bg-color-text');
@@ -1107,17 +1000,14 @@ const openItemEdit = (id, catId) => {
     colorText.addEventListener('input', () => {
         if (/^#[0-9a-fA-F]{6}$/.test(colorText.value)) colorInput.value = colorText.value;
     });
-
     document.getElementById('f-url').addEventListener('input', (e) => debouncedHandleUrlInput(e.target.value));
     document.getElementById('f-icon').addEventListener('input', (e) => updatePreview(e.target.value));
-
     ['1', '2'].forEach(num => {
         const opt = document.getElementById('opt-fav' + num);
         const txt = document.getElementById('txt-fav' + num);
         opt.addEventListener('change', () => selectIcon(txt.value));
         txt.addEventListener('click', () => { if (txt.value) { opt.checked = true; selectIcon(txt.value); } });
     });
-
     document.getElementById('btn-iconify-search').addEventListener('click', async () => {
         const query = document.getElementById('iconify-search').value.trim();
         if (!query) return;
@@ -1145,7 +1035,6 @@ const openItemEdit = (id, catId) => {
             resBox.innerHTML = '<span style="font-size:12px; color:#e74c3c;">网络或接口错误</span>';
         }
     });
-
     const EMOJI_KEYWORDS = {
         'github': '🐙', 'git': '📦', 'code': '💻', '编程': '💻', '开发': '🛠️',
         'google': '🔍', 'search': '🔍', '搜索': '🔍',
@@ -1180,7 +1069,6 @@ const openItemEdit = (id, catId) => {
         'fire': '🔥', 'hot': '🔥', 'trending': '📈', '热门': '🔥',
         'bilibili': '📺', 'b站': '📺', '哔哩哔哩': '📺'
     };
-
     const getRecommendedEmojis = (title) => {
         const results = new Set();
         const lowerTitle = title.toLowerCase();
@@ -1193,7 +1081,6 @@ const openItemEdit = (id, catId) => {
         const extras = window.emojiPool ? window.emojiPool.getRandomEmojis(4) : ['🌟', '💫', '✨', '🔮'];
         return [...results, ...extras].slice(0, 8);
     };
-
     const renderEmojiSuggestions = (emojis) => {
         const container = document.getElementById('emoji-results');
         if (!container) return;
@@ -1211,12 +1098,10 @@ const openItemEdit = (id, catId) => {
             container.appendChild(span);
         });
     };
-
     const recommendEmojis = () => {
         const title = document.getElementById('emoji-recommend-title').value;
         renderEmojiSuggestions(getRecommendedEmojis(title || safeTitle));
     };
-
     document.getElementById('btn-emoji-recommend').addEventListener('click', recommendEmojis);
     document.getElementById('btn-emoji-refresh').addEventListener('click', () => {
         renderEmojiSuggestions(getRecommendedEmojis(document.getElementById('emoji-recommend-title').value || safeTitle));
@@ -1224,18 +1109,15 @@ const openItemEdit = (id, catId) => {
     document.getElementById('emoji-recommend-title').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') recommendEmojis();
     });
-
     updatePreview(item.icon);
     if (item.url) handleUrlInput(item.url, false);
     document.getElementById('edit-modal').style.display = 'flex';
 };
-
 const selectIcon = (url) => {
     if (!url) return;
     document.getElementById('f-icon').value = url;
     updatePreview(url);
 };
-
 const handleUrlInput = (url, autoSelect = true) => {
     if (url && url.startsWith('http')) {
         try {
@@ -1268,7 +1150,6 @@ const handleUrlInput = (url, autoSelect = true) => {
         document.getElementById('opt-fav2').checked = false;
     }
 };
-
 const updatePreview = (val) => {
     const box = document.getElementById('preview-box');
     if (!val) { box.innerHTML = '🔗'; return; }
@@ -1280,22 +1161,18 @@ const updatePreview = (val) => {
         box.innerHTML = `<span class="emoji-icon">${safeVal}</span>`;
     }
 };
-
 // ==================== 分类管理 ====================
 const manageCats = () => {
     editingType = 'cats';
     document.getElementById('edit-title').innerText = '偏好与分类设置';
-
     const currentWidth = (appData.settings && appData.settings.cardWidth) ? appData.settings.cardWidth : 85;
     const currentBg = (appData.settings && appData.settings.bgUrl) ? appData.settings.bgUrl : '';
     const bgIsColor = /^#[0-9a-fA-F]{6}$/.test(currentBg);
-
     const themeOptions = [
         { value: 'auto', label: '跟随系统' },
         { value: 'light', label: '亮色模式' },
         { value: 'dark', label: '暗色模式' }
     ].map(opt => `<option value="${opt.value}" ${themeMode === opt.value ? 'selected' : ''}>${opt.label}</option>`).join('');
-
     document.getElementById('edit-form-body').innerHTML = `
         <div class="form-row" style="margin-bottom: 10px;">
             <label>网格高度</label><input type="number" id="setting-width" value="${currentWidth}"><span style="color:#666; margin-left:10px;">px</span>
@@ -1334,7 +1211,6 @@ const manageCats = () => {
         </div>
         <button class="tab-btn active" id="btn-add-cat" style="width:100%; margin-top:15px">+ 新增分类</button>
     `;
-
     document.getElementById('setting-width').addEventListener('input', (e) => changeCardWidth(e.target.value));
     document.getElementById('setting-theme').addEventListener('change', (e) => {
         themeMode = e.target.value;
@@ -1346,7 +1222,6 @@ const manageCats = () => {
         localStorage.setItem('nav_simple_mode', simpleMode);
         document.body.classList.toggle('no-blur', simpleMode);
     });
-
     const bgColorPicker = document.getElementById('setting-bg-color');
     const bgTextInput = document.getElementById('setting-bg');
     bgColorPicker.addEventListener('input', () => {
@@ -1363,7 +1238,6 @@ const manageCats = () => {
         applyBackgroundConfig();
     });
     document.getElementById('btn-add-cat').addEventListener('click', addCat);
-
     const catListSort = document.getElementById('cat-list-sort');
     catListSort.addEventListener('change', (e) => {
         if (e.target.classList.contains('cat-icon-input')) {
@@ -1381,7 +1255,6 @@ const manageCats = () => {
         const delBtn = e.target.closest('.btn-cat-del');
         if (delBtn) { e.preventDefault(); deleteObj('categories', delBtn.getAttribute('data-id')); }
     });
-
     new Sortable(catListSort, {
         animation: 150,
         handle: '.drag-handle',
@@ -1398,22 +1271,18 @@ const manageCats = () => {
             saveAll(true);
         }
     });
-
     document.getElementById('edit-modal').style.display = 'flex';
 };
-
 const changeCardWidth = (val) => {
     if (!appData.settings) appData.settings = {};
     appData.settings.cardWidth = parseInt(val) || 85;
     updateGridWidth();
 };
-
 const updateCatData = (id, field, val) => {
     const cat = appData.categories.find(c => c.id === id);
     if (cat) cat[field] = val;
     renderNav();
 };
-
 const addCat = () => {
     const usedLetters = appData.categories.map(c => c.id.charAt(0).toUpperCase());
     let nextLetter = 'A';
@@ -1426,7 +1295,6 @@ const addCat = () => {
     manageCats();
     renderNav();
 };
-
 const confirmEdit = () => {
     if (editingType === 'items') {
         const url = document.getElementById('f-url').value;
@@ -1435,7 +1303,6 @@ const confirmEdit = () => {
         const icon = document.getElementById('f-icon').value;
         const bgColor = document.getElementById('f-bg-color-text').value.trim();
         const catId = document.getElementById('f-cat').value;
-
         if (editingId) {
             const idx = appData.items.findIndex(i => i.id === editingId);
             if (idx > -1) {
@@ -1457,7 +1324,6 @@ const confirmEdit = () => {
     closeModal();
     saveAll(false);
 };
-
 const toggleHide = (type, id) => {
     const item = appData[type].find(o => o.id === id);
     if (item) item.hidden = !item.hidden;
@@ -1465,7 +1331,6 @@ const toggleHide = (type, id) => {
     renderNav();
     if (type === 'categories') manageCats();
 };
-
 const deleteObj = (type, id) => {
     if (confirm('确定删除？')) {
         const idx = appData[type].findIndex(o => o.id === id);
@@ -1475,17 +1340,14 @@ const deleteObj = (type, id) => {
         saveAll(false);
     }
 };
-
 // ==================== 认证相关 ====================
 const doLogin = async () => {
     showLoader('正在验证管理员身份...');
     const rawPwd = document.getElementById('auth-input').value.trim();
     if (!rawPwd) { hideLoader(); return showToast("请输入密码", "#e67e22"); }
-
     sysToken = await hashPassword(rawPwd);
     localStorage.setItem('nav_token', sysToken);
     document.getElementById('auth-overlay').style.display = 'none';
-
     await init(true);
     hideLoader();
     if (!isAdmin) {
@@ -1497,7 +1359,6 @@ const doLogin = async () => {
         document.getElementById('auth-input').value = '';
     }
 };
-
 const doLogout = async () => {
     showLoader('正在退出管理模式...');
     await new Promise(r => setTimeout(r, 600));
@@ -1506,21 +1367,17 @@ const doLogout = async () => {
     isAdmin = false;
     appData.isAdmin = false;
     localStorage.setItem('nav_app_data', JSON.stringify(appData));
-
     hideLoader();
     showToast("已退出管理模式", "#399dff");
     init(true);
 };
-
 // ==================== 数据操作 ====================
 const saveAll = async (silent = false) => {
     if (!silent) showLoader('正在同步配置中...');
-
     const dataToSave = { ...appData };
     delete dataToSave.isAdmin;
     delete dataToSave.bgUrl;
     localStorage.setItem('nav_app_data', JSON.stringify(appData));
-
     try {
         const res = await fetch('/api/config', {
             method: 'POST',
@@ -1534,7 +1391,6 @@ const saveAll = async (silent = false) => {
         if (!silent) { hideLoader(); showToast("网络错误，配置仅保存在本地", "#e67e22"); }
     }
 };
-
 const importConfig = (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -1558,7 +1414,6 @@ const importConfig = (event) => {
     reader.readAsText(file);
     event.target.value = '';
 };
-
 const exportConfig = () => {
     let sortedItems = [];
     appData.categories.forEach(cat => {
@@ -1567,7 +1422,6 @@ const exportConfig = () => {
     const dataToExport = { settings: appData.settings, categories: appData.categories, items: sortedItems };
     let jsonStr = JSON.stringify(dataToExport, null, 2);
     jsonStr = jsonStr.replace(/\{[\s\S]*?\}/g, (match) => match.replace(/\n\s+/g, ' '));
-
     const blob = new Blob([jsonStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1578,7 +1432,6 @@ const exportConfig = () => {
     URL.revokeObjectURL(url);
     showToast("配置已按紧凑格式导出");
 };
-
 const resetConfig = async () => {
     if (!confirm('确定恢复默认配置？此操作不可撤销。')) return;
     showLoader('正在重置...');
@@ -1600,11 +1453,9 @@ const resetConfig = async () => {
         showToast("网络错误", "#e74c3c");
     }
 };
-
 const closeModal = () => {
     document.getElementById('edit-modal').style.display = 'none';
 };
-
 // ==================== 事件绑定 ====================
 document.getElementById('btn-login').addEventListener('click', doLogin);
 document.getElementById('auth-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
@@ -1612,3 +1463,4 @@ document.getElementById('btn-close-auth').addEventListener('click', () => { docu
 document.getElementById('btn-confirm-edit').addEventListener('click', confirmEdit);
 document.getElementById('btn-close-edit').addEventListener('click', closeModal);
 document.getElementById('import-file').addEventListener('change', importConfig);
+

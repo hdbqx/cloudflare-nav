@@ -91,7 +91,7 @@ body.light-theme .card {
 
 body.light-theme .card:hover {
     background: rgba(255, 255, 255, 0.8);
-    box-shadow: 0 0 12px rgba(57, 157, 255, 0.2), 0 2px 8px rgba(0, 0, 0, 0.08);
+    /* 光晕 box-shadow 由 hover-card.css 的 [data-color-ready]:hover 驱动 */
 }
 
 body.light-theme .card h3 {
@@ -208,16 +208,7 @@ body.no-blur body.view-style-2 .card.has-bg {
     -webkit-backdrop-filter: none !important;
 }
 
-/* 移动端减少阴影 */
-@media (max-width: 768px) {
-    .card:hover {
-        box-shadow: 0 0 10px rgba(57, 157, 255, 0.3), 0 0 20px rgba(57, 157, 255, 0.1);
-    }
-
-    body.view-style-2 .card.has-bg:hover {
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2), 0 0 10px var(--card-bg-color, rgba(255,255,255,0.15));
-    }
-}
+/* 移动端光晕效果由 hover-card.css 的 @media 统一管理 */
 
 /* ==================== 全局重置 ==================== */
 * {
@@ -554,11 +545,11 @@ body::before {
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
+/* 卡片悬停光晕由 hover-card.css 驱动，这里只保留基础 hover 状态
+   颜色相关 box-shadow 和 border 由 [data-color-ready]:hover 覆盖 */
 .card:hover {
     background: var(--glass-hover);
-    transform: translateY(-2px);
-    box-shadow: 0 0 15px rgba(57, 157, 255, 0.5), 0 0 30px rgba(57, 157, 255, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .card.sortable-ghost {
@@ -1174,12 +1165,9 @@ body.view-style-2 .card.has-bg {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
+/* Style 2 光晕由 hover-card.css 统一管理 */
 body.view-style-2 .card.has-bg:hover {
     transform: translateY(-2px);
-    box-shadow: 
-        0 8px 25px rgba(0, 0, 0, 0.3), 
-        0 0 15px var(--card-bg-color, rgba(255,255,255,0.2)),
-        0 0 30px rgba(255, 255, 255, 0.1);
 }
 
 body.view-style-2 .card:not(.has-bg):hover {
@@ -1187,9 +1175,6 @@ body.view-style-2 .card:not(.has-bg):hover {
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-color: rgba(255, 255, 255, 0.4);
-    box-shadow: 
-        0 8px 20px rgba(0, 0, 0, 0.3),
-        0 0 15px rgba(255, 255, 255, 0.15);
     transform: translateY(-2px);
 }
 
