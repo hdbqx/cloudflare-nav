@@ -91,7 +91,6 @@ body.light-theme .card {
 
 body.light-theme .card:hover {
     background: rgba(255, 255, 255, 0.8);
-    box-shadow: 0 0 12px rgba(57, 157, 255, 0.2), 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 body.light-theme .card h3 {
@@ -211,11 +210,11 @@ body.no-blur body.view-style-2 .card.has-bg {
 /* 移动端减少阴影 */
 @media (max-width: 768px) {
     .card:hover {
-        box-shadow: 0 0 10px rgba(57, 157, 255, 0.3), 0 0 20px rgba(57, 157, 255, 0.1);
+        box-shadow: none;
     }
 
     body.view-style-2 .card.has-bg:hover {
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2), 0 0 10px var(--card-bg-color, rgba(255,255,255,0.15));
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     }
 }
 
@@ -1174,20 +1173,14 @@ body.view-style-2 .card.has-bg {
 
 body.view-style-2 .card.has-bg:hover {
     transform: translateY(-2px);
-    box-shadow: 
-        0 8px 25px rgba(0, 0, 0, 0.3), 
-        0 0 15px var(--card-bg-color, rgba(255,255,255,0.2)),
-        0 0 30px rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 body.view-style-2 .card:not(.has-bg):hover {
     background: rgba(110, 115, 135, 0.32);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border-color: rgba(255, 255, 255, 0.4);
-    box-shadow: 
-        0 8px 20px rgba(0, 0, 0, 0.3),
-        0 0 15px rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     transform: translateY(-2px);
 }
 
@@ -1285,8 +1278,7 @@ body.view-style-2 .card[data-tooltip]::before {
 
 .video-card:hover {
     transform: translateY(-3px);
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4), 0 0 15px rgba(57, 157, 255, 0.3);
-    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .video-card-cover {
