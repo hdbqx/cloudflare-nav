@@ -26,187 +26,6 @@ let monacoEditor = null;
 // ==================== Bilibili 封面缓存 ====================
 const bilibiliCoverCache = new Map();
 
-// ==================== 颜色提取缓存 ====================
-const colorCache = new Map();
-
-/**
- * 从图片提取主要颜色
- * @param {string} imgUrl - 图片URL
- * @returns {Promise<{hex: string, rgb: string}|null>}
- */
-const extractColorFromImage = async (imgUrl) => {
-    if (colorCache.has(imgUrl)) {
-        return colorCache.get(imgUrl);
-    }
-
-    return new Promise((resolve) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-
-            if (!ctx) {
-                resolve(null);
-                return;
-            }
-
-            const scaleFactor = 50 / Math.max(img.width, img.height);
-            canvas.width = img.width * scaleFactor;
-            canvas.height = img.height * scaleFactor;
-
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const data = imageData.data;
-
-            const colorMap = new Map();
-
-            for (let i = 0; i < data.length; i += 4) {
-                const r = data[i];
-                const g = data[i + 1];
-                const b = data[i + 2];
-                const a = data[i + 3];
-
-                if (a < 128) continue;
-
-                const brightness = (r + g + b) / 3;
-                const isGrayish = Math.abs(r - g) < 30 && Math.abs(g - b) < 30 && Math.abs(r - b) < 30;
-
-                if (brightness > 240 || isGrayish) continue;
-
-                const qR = Math.round(r / 20) * 20;
-                const qG = Math.round(g / 20) * 20;
-                const qB = Math.round(b / 20) * 20;
-
-                const colorKey = `${qR},${qG},${qB}`;
-                colorMap.set(colorKey, (colorMap.get(colorKey) || 0) + 1);
-            }
-
-            let dominantColor = '';
-            let maxCount = 0;
-
-            for (const [color, count] of colorMap) {
-                if (count > maxCount) {
-                    maxCount = count;
-                    dominantColor = color;
-                }
-            }
-
-            if (dominantColor) {
-                const [r, g, b] = dominantColor.split(',').map(Number);
-                const hex = '#' + [r, g, b].map(x => {
-                    const h = x.toString(16);
-                    return h.length === 1 ? '0' + h : h;
-                }).join('');
-                const rgb = `${r}, ${g}, ${b}`;
-
-                const result = { hex, rgb };
-                colorCache.set(imgUrl, result);
-                resolve(result);
-            } else {
-                const defaultColor = { hex: '#399dff', rgb: '57, 157, 255' };
-                colorCache.set(imgUrl, defaultColor);
-                resolve(defaultColor);
-            }
-        };
-
-        img.onerror = () => {
-            const defaultColor = { hex: '#399dff', rgb: '57, 157, 255' };
-            colorCache.set(imgUrl, defaultColor);
-            resolve(defaultColor);
-        };
-
-        img.src = imgUrl;
-    });
-};
-
-/**
- * 从文本生成颜色（用于没有图标的情况）
- * @param {string} text - 文本
- * @returns {{hex: string, rgb: string}}
- */
-const generateColorFromText = (text) => {
-    let hash = 0;
-    for (let i = 0; i < text.length; i++) {
-        hash = text.charCodeAt(i) + ((hash << 5) - hash);
-    }
-
-    const hue = hash % 360;
-    const saturation = 65 + (hash % 15);
-    const lightness = 45 + (hash % 10);
-
-    const s = saturation / 100;
-    const l = lightness / 100;
-    const c = (1 - Math.abs(2 * l - 1)) * s;
-    const x = c * (1 - Math.abs((hue / 60) % 2 - 1));
-    const m = l - c / 2;
-
-    let r = 0, g = 0, b = 0;
-
-    if (0 <= hue && hue < 60) { r = c; g = x; b = 0; }
-    else if (60 <= hue && hue < 120) { r = x; g = c; b = 0; }
-    else if (120 <= hue && hue < 180) { r = 0; g = c; b = x; }
-    else if (180 <= hue && hue < 240) { r = 0; g = x; b = c; }
-    else if (240 <= hue && hue < 300) { r = x; g = 0; b = c; }
-    else if (300 <= hue && hue < 360) { r = c; g = 0; b = x; }
-
-    r = Math.round((r + m) * 255);
-    g = Math.round((g + m) * 255);
-    b = Math.round((b + m) * 255);
-
-    const hex = '#' + [r, g, b].map(x => {
-        const h = x.toString(16);
-        return h.length === 1 ? '0' + h : h;
-    }).join('');
-    const rgb = `${r}, ${g}, ${b}`;
-
-    return { hex, rgb };
-};
-
-/**
- * 鼠标位置追踪 - 更新卡片的 --pointer-x 和 --pointer-y
- */
-const initCardMouseTracking = () => {
-    document.addEventListener('mousemove', (e) => {
-        const card = e.target.closest('.card');
-        if (!card) return;
-
-        const rect = card.getBoundingClientRect();
-        const x = (e.clientX - rect.left) / rect.width;
-        const y = (e.clientY - rect.top) / rect.height;
-        
-        card.style.setProperty('--pointer-x', x);
-        card.style.setProperty('--pointer-y', y);
-    });
-};
-
-/**
- * 批量为卡片应用颜色
- */
-const applyColorsToCards = async () => {
-    const cards = document.querySelectorAll('.card:not([data-color-ready])');
-    for (const card of cards) {
-        const itemId = card.getAttribute('data-id');
-        const item = appData.items.find(i => i.id === itemId);
-        if (!item) continue;
-
-        let color = null;
-        
-        if (item.icon && item.icon.startsWith('http')) {
-            color = await extractColorFromImage(item.icon);
-        } else {
-            color = generateColorFromText(item.title);
-        }
-
-        if (color) {
-            card.style.setProperty('--icon-color', color.hex);
-            card.style.setProperty('--icon-color-rgb', color.rgb);
-            card.setAttribute('data-color-ready', '');
-        }
-    }
-};
-
 /**
  * 异步获取 Bilibili 视频封面 URL
  * @param {string} bvid - BV 号
@@ -344,10 +163,6 @@ document.addEventListener('DOMContentLoaded', () => {
     initStyleSwitcher();
     initVideoModal();
     initMonacoModal();
-    
-    // 初始化卡片鼠标追踪
-    initCardMouseTracking();
-    
     init();
 });
 
@@ -733,21 +548,16 @@ const buildCardInnerHTML = (item, adminHtml, style) => {
         ? `<img src="${safeIcon}" loading="lazy" ${fallbackAttr}>`
         : `<span class="emoji-icon">${safeIcon || '🔗'}</span>`;
 
-    // 图标背景层（用于光晕效果）
-    const iconBgHtml = isImgIcon
-        ? `<div class="icon-bg"><img src="${safeIcon}" loading="lazy" onerror="this.style.display='none';"></div>`
-        : `<div class="icon-bg"><span>${safeIcon || '🔗'}</span></div>`;
-
     const safeUrl = utils.escapeHTML(item.url);
     const safeTitle = utils.escapeHTML(item.title);
 
     if (style === 2) {
-        return `${adminHtml}${iconBgHtml}<div class="card-content"><a href="${safeUrl}" target="_blank">
+        return `${adminHtml}<a href="${safeUrl}" target="_blank">
             <div class="icon-wrapper">${iconHtml}</div>
             <div class="card-text-block"><h3>${safeTitle}</h3></div>
-        </a></div>`;
+        </a>`;
     } else {
-        return `${adminHtml}${iconBgHtml}<div class="card-content"><a href="${safeUrl}" target="_blank"><div class="icon-wrapper">${iconHtml}</div><h3>${safeTitle}</h3></a></div>`;
+        return `${adminHtml}<a href="${safeUrl}" target="_blank"><div class="icon-wrapper">${iconHtml}</div><h3>${safeTitle}</h3></a>`;
     }
 };
 
@@ -1083,9 +893,6 @@ const renderNav = () => {
 
     // 滚动监听：自动高亮当前可见分类
     initScrollSpy();
-
-    // 异步应用颜色到卡片
-    applyColorsToCards();
 };
 
 // ==================== 视频卡片构建 ====================
