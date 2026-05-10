@@ -531,7 +531,7 @@ body::before {
 /* ==================== 卡片样式（Style 0 默认） ==================== */
 .card {
     background: var(--glass);
-    border: none;
+    border: 1px solid transparent;
     border-radius: var(--radius);
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     position: relative;
@@ -546,10 +546,11 @@ body::before {
 }
 
 /* 卡片悬停光晕由 hover-card.css 驱动，这里只保留基础 hover 状态
-   颜色相关 box-shadow 和 border 由 [data-color-ready]:hover 覆盖 */
+   颜色相关 box-shadow 和 border-color 由 [data-color-ready]:hover 覆盖
+   注意：不能使用 border shorthand，否则会覆盖 hover-card.css 的 border-color */
 .card:hover {
     background: var(--glass-hover);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.2);
 }
 
 .card.sortable-ghost {

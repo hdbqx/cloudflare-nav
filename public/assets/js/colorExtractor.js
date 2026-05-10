@@ -78,12 +78,19 @@
         });
     }
 
-    // 加载图片（优先尝试 CORS 模式）
+    // 加载图片（优先尝试 CORS 模式，失败后不带 CORS 重试）
     function loadImage(src) {
         return new Promise(function (resolve) {
+            // 先尝试 CORS 模式
             const img = new Image();
             img.onload = function () { resolve(img); };
-            img.onerror = function () { resolve(null); };
+            img.onerror = function () {
+                // CORS 失败，不带 crossOrigin 重试（图片仍可显示，但 Canvas 会被污染）
+                const img2 = new Image();
+                img2.onload = function () { resolve(img2); };
+                img2.onerror = function () { resolve(null); };
+                img2.src = src;
+            };
             img.crossOrigin = 'anonymous';
             img.src = src;
         });
