@@ -8,14 +8,15 @@
 
 export const defaultData = {
   // 全局设置
-  settings: { cardWidth: 125 },
+  settings: { cardWidth: 90 },
 
   // 分类列表
   categories: [
-    { id: "A01", name: "社交", icon: "💬", hidden: false },
-    { id: "B01", name: "视频", icon: "🎬", hidden: false },
-    { id: "C01", name: "新闻", icon: "📰", hidden: false },
-    { id: "D01", name: "AI", icon: "🤖", hidden: false }
+    { id: "A01", name: "社交网站", icon: "💬", hidden: false },
+    { id: "B01", name: "直播网站", icon: "🎬", hidden: false },
+    { id: "C01", name: "新闻网站", icon: "📰", hidden: false },
+    { id: "D01", name: "AI网站", icon: "🤖", hidden: false }
+    { id: "F01", name: "视频网站", icon: "🎬", hidden: false, _isVideo: true }
   ],
 
   // 网站条目列表
@@ -30,7 +31,7 @@ export const defaultData = {
     { id: "A007", catId: "A01", title: "QQ空间", url: "https://qzone.qq.com/", desc: "QQ社交空间", icon: "https://favicon.im/qzone.qq.com", hidden: false },
     { id: "A008", catId: "A01", title: "煎蛋网", url: "https://jandan.net/", desc: "趣图段子", icon: "https://favicon.im/jandan.net", hidden: false },
 
-    // ===== 视频分类 (B01) =====
+    // ===== 直播分类 (B01) =====
     { id: "B001", catId: "B01", title: "腾讯视频", url: "https://v.qq.com/", desc: "视频平台", icon: "https://favicon.im/v.qq.com", hidden: false },
     { id: "B002", catId: "B01", title: "优酷网", url: "https://www.youku.com/", desc: "视频平台", icon: "https://favicon.im/www.youku.com", hidden: false },
     { id: "B003", catId: "B01", title: "芒果TV", url: "https://www.mgtv.com/", desc: "湖南卫视", icon: "https://favicon.im/www.mgtv.com", hidden: false },
@@ -59,6 +60,13 @@ export const defaultData = {
     { id: "D006", catId: "D01", title: "Kimi", url: "https://www.kimi.com/", desc: "月之暗面AI", icon: "https://favicon.im/www.kimi.com", hidden: false },
     { id: "D007", catId: "D01", title: "元宝", url: "https://yuanbao.tencent.com/", desc: "腾讯AI助手", icon: "https://favicon.im/yuanbao.tencent.com", hidden: false },
     { id: "D008", catId: "D01", title: "即梦AI", url: "https://jimeng.jianying.com/", desc: "字节AI绘画", icon: "https://favicon.im/jimeng.jianying.com", hidden: false },
-    { id: "D009", catId: "D01", title: "Gemini", url: "https://gemini.google.com/", desc: "谷歌AI助手", icon: "https://www.gstatic.com/lamda/images/gemini_sparkle_aurora_33f86dc0c0257da337c63.svg", hidden: false }
+    { id: "D009", catId: "D01", title: "Gemini", url: "https://gemini.google.com/", desc: "谷歌AI助手", icon: "https://www.gstatic.com/lamda/images/gemini_sparkle_aurora_33f86dc0c0257da337c63.svg", hidden: false },
+    // ===== 视频分类 (F001) =====
+    { "id": "F001", "url": "https://www.youtube.com/watch?v=NZ-0-A_PJHI", "title": "三立新闻", "desc": "Youtube三立新闻", "icon": "https://favicon.im/www.youtube.com", "bgColor": "", "catId": "F01", "hidden": false },
+    { "id": "F002", "url": "https://www.youtube.com/watch?v=0HfK88DB41E", "title": "三立新闻", "desc": "Youtube三立新闻", "icon": "https://favicon.im/www.youtube.com", "bgColor": "", "catId": "F01", "hidden": false },
+    { "id": "F004", "url": "https://www.youtube.com/watch?v=m_dhMSvUCIc", "title": "TVBS新闻", "desc": "Youtube TVBS新闻", "icon": "https://favicon.im/www.youtube.com", "bgColor": "", "catId": "F01", "hidden": false },
+    { "id": "F005", "url": "https://www.youtube.com/watch?v=6IquAgfvYmc", "title": "寰宇新闻", "desc": "Youtube寰宇新闻", "icon": "https://favicon.im/www.youtube.com", "bgColor": "", "catId": "F01", "hidden": false },
+    { "id": "F003", "url": "https://www.youtube.com/watch?v=rqJz_D-6B_o", "title": "哏传媒", "desc": "Youtube哏传媒", "icon": "https://favicon.im/www.youtube.com", "bgColor": "", "catId": "F01", "hidden": false },
+    { "id": "F006", "url": "https://www.bilibili.com/video/BV1Cj9qByEaf", "title": "楼下粉猪君", "desc": "", "icon": "https://favicon.im/live.bilibili.com", "bgColor": "", "catId": "F01", "hidden": false }
   ]
 };
