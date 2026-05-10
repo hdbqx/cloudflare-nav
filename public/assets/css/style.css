@@ -91,7 +91,7 @@ body.light-theme .card {
 
 body.light-theme .card:hover {
     background: rgba(255, 255, 255, 0.8);
-    /* 光晕 box-shadow 由 hover-card.css 的 [data-color-ready]:hover 驱动 */
+    box-shadow: 0 0 12px rgba(57, 157, 255, 0.2), 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 body.light-theme .card h3 {
@@ -208,7 +208,16 @@ body.no-blur body.view-style-2 .card.has-bg {
     -webkit-backdrop-filter: none !important;
 }
 
-/* 移动端光晕效果由 hover-card.css 的 @media 统一管理 */
+/* 移动端减少阴影 */
+@media (max-width: 768px) {
+    .card:hover {
+        box-shadow: 0 0 10px rgba(57, 157, 255, 0.3), 0 0 20px rgba(57, 157, 255, 0.1);
+    }
+
+    body.view-style-2 .card.has-bg:hover {
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2), 0 0 10px var(--card-bg-color, rgba(255,255,255,0.15));
+    }
+}
 
 /* ==================== 全局重置 ==================== */
 * {
@@ -533,7 +542,7 @@ body::before {
     background: var(--glass);
     border: 1px solid transparent;
     border-radius: var(--radius);
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    transition: all 0.25s ease-out;
     position: relative;
     cursor: pointer;
     min-height: var(--card-h, 85px);
@@ -543,14 +552,90 @@ body::before {
     justify-content: center;
     width: 100%;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    --icon-color: #399dff;
+    --icon-color-rgb: 57, 157, 255;
+    --pointer-x: 0.5;
+    --pointer-y: 0.5;
 }
 
-/* 卡片悬停光晕由 hover-card.css 驱动，这里只保留基础 hover 状态
-   颜色相关 box-shadow 和 border-color 由 [data-color-ready]:hover 覆盖
-   注意：不能使用 border shorthand，否则会覆盖 hover-card.css 的 border-color */
-.card:hover {
+/* 图标模糊背景 */
+.card .icon-bg {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    transform: translateZ(0);
+    filter: blur(20px) saturate(3) brightness(1.2) contrast(1.3);
+    translate: calc(var(--pointer-x, 0.5) * 40%) calc(var(--pointer-y, 0.5) * 40%);
+    scale: 2.8;
+    opacity: 0.15;
+    will-change: transform, filter;
+    transition: opacity 0.3s ease-out;
+    z-index: 0;
+}
+
+.card:not(:hover):not(:focus-within) .icon-bg {
+    opacity: calc(0.15 * 0.3);
+    transition: opacity 0.4s ease-out;
+}
+
+.card .icon-bg img {
+    width: 80px;
+    height: 80px;
+    object-fit: contain;
+    opacity: 0.8;
+}
+
+.card .icon-bg span {
+    color: var(--icon-color);
+    opacity: 0.3;
+    font-size: 48px;
+    font-weight: bold;
+}
+
+/* 卡片内容层 */
+.card .card-content {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.card[data-color-ready]:hover {
+    border-color: rgba(var(--icon-color-rgb), 0.5);
+    box-shadow:
+        0 0 0 1px rgba(var(--icon-color-rgb), 0.3),
+        0 10px 25px -5px rgba(var(--icon-color-rgb), 0.2),
+        0 4px 10px -4px rgba(var(--icon-color-rgb), 0.1);
+}
+
+.card[data-color-ready]:hover::after {
+    content: '';
+    position: absolute;
+    pointer-events: none;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(
+        800px circle at calc(var(--pointer-x, 0.5) * 100%) calc(var(--pointer-y, 0.5) * 100%),
+        rgba(var(--icon-color-rgb), 0.1) 0%,
+        rgba(var(--icon-color-rgb), 0.04) 20%,
+        transparent 40%
+    );
+    z-index: 1;
+}
+
+/* 未提取颜色时的默认悬停效果 */
+.card:not([data-color-ready]):hover {
+    border-color: rgba(57, 157, 255, 0.4);
+    box-shadow:
+        0 0 0 1px rgba(57, 157, 255, 0.2),
+        0 10px 25px -5px rgba(57, 157, 255, 0.15);
     background: var(--glass-hover);
-    border-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
 }
 
 .card.sortable-ghost {
@@ -1166,9 +1251,12 @@ body.view-style-2 .card.has-bg {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-/* Style 2 光晕由 hover-card.css 统一管理 */
 body.view-style-2 .card.has-bg:hover {
     transform: translateY(-2px);
+    box-shadow: 
+        0 8px 25px rgba(0, 0, 0, 0.3), 
+        0 0 15px var(--card-bg-color, rgba(255,255,255,0.2)),
+        0 0 30px rgba(255, 255, 255, 0.1);
 }
 
 body.view-style-2 .card:not(.has-bg):hover {
@@ -1176,6 +1264,9 @@ body.view-style-2 .card:not(.has-bg):hover {
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-color: rgba(255, 255, 255, 0.4);
+    box-shadow: 
+        0 8px 20px rgba(0, 0, 0, 0.3),
+        0 0 15px rgba(255, 255, 255, 0.15);
     transform: translateY(-2px);
 }
 
