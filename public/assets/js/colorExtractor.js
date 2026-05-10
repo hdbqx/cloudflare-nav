@@ -41,8 +41,7 @@
         var ctx = canvas.getContext('2d');
 
         if (!ctx) {
-          colorCache.set(imgUrl, DEFAULT_COLOR);
-          resolve(DEFAULT_COLOR);
+          resolve(null);
           return;
         }
 
@@ -105,8 +104,7 @@
       };
 
       img.onerror = function () {
-        colorCache.set(imgUrl, DEFAULT_COLOR);
-        resolve(DEFAULT_COLOR);
+        reject(new Error('image load failed'));
       };
 
       img.src = imgUrl;

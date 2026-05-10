@@ -540,32 +540,58 @@ const renderTools = () => {
 };
 
 // ==================== 卡片 HTML 生成 ====================
-const buildCardInnerHTML = (item, adminHtml, style) => {
-    let fallbackAttr = `onerror="this.outerHTML='<span class=\'emoji-icon\'>'+window.utils.getRandomEmoji()+'</span>';"`;
-    const safeIcon = utils.escapeHTML(item.icon);
-    const isImgIcon = item.icon && item.icon.startsWith('http');
-    const iconHtml = isImgIcon
-        ? `<img src="${safeIcon}" loading="lazy" ${fallbackAttr}>`
-        : `<span class="emoji-icon">${safeIcon || '\u{1F517}'}</span>`;
-
-    const safeUrl = utils.escapeHTML(item.url);
-    const safeTitle = utils.escapeHTML(item.title);
-
-    // 光晕背景层：用图标图片或 emoji 作为模糊扩散光源
-    const glowBgHtml = isImgIcon
-        ? `<div class="card-glow-bg"><img src="${safeIcon}" loading="lazy" aria-hidden="true"></div>`
-        : `<div class="card-glow-bg"><div class="glow-emoji">${safeIcon || '\u{1F517}'}</div></div>`;
-
-    if (style === 2) {
-        return `${glowBgHtml}${adminHtml}<a href="${safeUrl}" target="_blank">
-            <div class="icon-wrapper">${iconHtml}</div>
-            <div class="card-text-block"><h3>${safeTitle}</h3></div>
-        </a>`;
-    } else {
-        return `${glowBgHtml}${adminHtml}<a href="${safeUrl}" target="_blank"><div class="icon-wrapper">${iconHtml}</div><h3>${safeTitle}</h3></a>`;
-    }
-};
-
+const buildCardInnerHTML = (item, adminHtml, style) => {
+
+    let fallbackAttr = `onerror="this.outerHTML='<span class=\'emoji-icon\'>'+window.utils.getRandomEmoji()+'</span>';"`;
+
+    const safeIcon = utils.escapeHTML(item.icon);
+
+    const isImgIcon = item.icon && item.icon.startsWith('http');
+
+    const iconHtml = isImgIcon
+
+        ? `<img src="${safeIcon}" loading="lazy" ${fallbackAttr}>`
+
+        : `<span class="emoji-icon">${safeIcon || '\u{1F517}'}</span>`;
+
+
+
+    const safeUrl = utils.escapeHTML(item.url);
+
+    const safeTitle = utils.escapeHTML(item.title);
+
+
+
+    // 光晕背景层：用图标图片或 emoji 作为模糊扩散光源
+
+    const glowBgHtml = isImgIcon
+
+        ? `<div class="card-glow-bg"><img src="${safeIcon}" loading="lazy" aria-hidden="true"></div>`
+
+        : `<div class="card-glow-bg"><div class="glow-emoji">${safeIcon || '\u{1F517}'}</div></div>`;
+
+
+
+    if (style === 2) {
+
+        return `${glowBgHtml}${adminHtml}<a href="${safeUrl}" target="_blank">
+
+            <div class="icon-wrapper">${iconHtml}</div>
+
+            <div class="card-text-block"><h3>${safeTitle}</h3></div>
+
+        </a>`;
+
+    } else {
+
+        return `${glowBgHtml}${adminHtml}<a href="${safeUrl}" target="_blank"><div class="icon-wrapper">${iconHtml}</div><h3>${safeTitle}</h3></a>`;
+
+    }
+
+};
+
+
+
 // ==================== 批量选择功能 ====================
 const toggleCardSelection = (id) => {
     if (selectedCardIds.has(id)) selectedCardIds.delete(id);
@@ -1005,15 +1031,32 @@ const initCardGlow = (container) => {
         const isImgIcon = iconSrc && iconSrc.startsWith('http');
         const title = item.title || '';
 
-        // 提取颜色并注入 CSS 变量
         if (isImgIcon) {
-            extractor.extractColorFromImage(iconSrc).then(color => {
-                if (color) {
-                    card.style.setProperty('--icon-color', color.hex);
-                    card.style.setProperty('--icon-color-rgb', color.rgb);
-                    card.setAttribute('data-color-ready', '');
-                }
-            });
+            extractor.extractColorFromImage(iconSrc)
+                .then(color => {
+                    if (color) {
+                        card.style.setProperty('--icon-color', color.hex);
+                        card.style.setProperty('--icon-color-rgb', color.rgb);
+                        card.setAttribute('data-color-ready', '');
+                    } else {
+                        // 提取失败：降级为文本颜色
+                        const fc = extractor.generateColorFromText(title);
+                        if (fc) {
+                            card.style.setProperty('--icon-color', fc.hex);
+                            card.style.setProperty('--icon-color-rgb', fc.rgb);
+                            card.setAttribute('data-color-ready', '');
+                        }
+                    }
+                })
+                .catch(err => {
+                    // CORS 或其他错误：降级为文本颜色
+                    const fc = extractor.generateColorFromText(title);
+                    if (fc) {
+                        card.style.setProperty('--icon-color', fc.hex);
+                        card.style.setProperty('--icon-color-rgb', fc.rgb);
+                        card.setAttribute('data-color-ready', '');
+                    }
+                });
         } else {
             // Emoji 或无图标：从文本生成颜色
             const color = extractor.generateColorFromText(iconSrc || title);
@@ -1043,12 +1086,12 @@ const initCardGlow = (container) => {
                 cancelAnimationFrame(rafId);
                 rafId = null;
             }
-            // 重置鼠标位置到中心
             card.style.setProperty('--pointer-x', '0.5');
             card.style.setProperty('--pointer-y', '0.5');
         });
     });
 };
+
 // ==================== 滚动监听（自动高亮侧边栏） ====================
 let scrollSpyInitialized = false;
 const initScrollSpy = () => {
