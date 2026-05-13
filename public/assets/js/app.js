@@ -9,7 +9,7 @@
  */
 
 // ==================== 全局变量定义 ====================
-let appData = { settings: { cardWidth: 85 }, categories: [], items: [] };
+let appData = { settings: { cardWidth: 85, siteName: '个人导航', siteIcon: '🌐', cardHeightDefault: 85, cardHeightColorful: 85 }, categories: [], items: [] };
 let activeCatId = '';
 let sysToken = localStorage.getItem('nav_token') || '';
 let isAdmin = false;
@@ -364,8 +364,12 @@ const toggleSimpleMode = () => {
 const updateGridWidth = () => {
     const width = (appData.settings && appData.settings.cardWidth) ? appData.settings.cardWidth : 85;
     document.documentElement.style.setProperty('--card-w', width + 'px');
-    // 卡片高度跟随宽度设置，保持视觉一致
     document.documentElement.style.setProperty('--card-h', width + 'px');
+    // 默认样式与缤纷样式各自独立的高度
+    const hDefault = (appData.settings && appData.settings.cardHeightDefault) ? appData.settings.cardHeightDefault : 85;
+    const hColorful = (appData.settings && appData.settings.cardHeightColorful) ? appData.settings.cardHeightColorful : 85;
+    document.documentElement.style.setProperty('--card-h-default', hDefault + 'px');
+    document.documentElement.style.setProperty('--card-h-colorful', hColorful + 'px');
 };
 
 const showLoader = (text = '正在处理中...') => {
@@ -447,6 +451,7 @@ const init = async (forceRender = false) => {
             renderTools();
             renderNav();
             applyBackgroundConfig();
+            updateSidebarHeader();
             if (appData.lastUpdated) {
                 document.getElementById('footer-cache').innerText = '最后同步：' + utils.escapeHTML(appData.lastUpdated);
             }
@@ -484,6 +489,7 @@ const init = async (forceRender = false) => {
         updateGridWidth();
         const isAdminChanged = initialIsAdmin !== isAdmin;
         applyBackgroundConfig();
+        updateSidebarHeader();
 
         if (forceRender || isDataChanged || isAdminChanged || !localCache) {
             toggleSkeleton(false);
@@ -1404,9 +1410,27 @@ const manageCats = () => {
         { value: 'dark', label: '暗色模式' }
     ].map(opt => `<option value="${opt.value}" ${themeMode === opt.value ? 'selected' : ''}>${opt.label}</option>`).join('');
 
+    const currentSiteName = (appData.settings && appData.settings.siteName) ? appData.settings.siteName : '个人导航';
+    const currentSiteIcon = (appData.settings && appData.settings.siteIcon) ? appData.settings.siteIcon : '🌐';
+
+    const currentDefaultHeight = (appData.settings && appData.settings.cardHeightDefault) ? appData.settings.cardHeightDefault : 85;
+    const currentColorfulHeight = (appData.settings && appData.settings.cardHeightColorful) ? appData.settings.cardHeightColorful : 85;
+
     document.getElementById('edit-form-body').innerHTML = `
+        <div class="form-row" style="margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
+            <label>站点图标</label><input type="text" id="setting-site-icon" value="${utils.escapeHTML(currentSiteIcon)}" placeholder="🌐 输入 emoji 或图标 URL" style="flex:1; padding:5px">
+        </div>
+        <div class="form-row" style="margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
+            <label>站点名称</label><input type="text" id="setting-site-name" value="${utils.escapeHTML(currentSiteName)}" placeholder="个人导航" style="flex:1; padding:5px">
+        </div>
         <div class="form-row" style="margin-bottom: 10px;">
-            <label>网格高度</label><input type="number" id="setting-width" value="${currentWidth}"><span style="color:#666; margin-left:10px;">px</span>
+            <label>网格宽度</label><input type="number" id="setting-width" value="${currentWidth}"><span style="color:#666; margin-left:10px;">px</span>
+        </div>
+        <div class="form-row" style="margin-bottom: 10px;">
+            <label>默认高度</label><input type="number" id="setting-height-default" value="${currentDefaultHeight}"><span style="color:#666; margin-left:10px;">px</span>
+        </div>
+        <div class="form-row" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 10px;">
+            <label>缤纷高度</label><input type="number" id="setting-height-colorful" value="${currentColorfulHeight}"><span style="color:#666; margin-left:10px;">px</span>
         </div>
         <div class="form-row" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 10px;">
             <label>自定义背景</label>
@@ -1444,6 +1468,16 @@ const manageCats = () => {
     `;
 
     document.getElementById('setting-width').addEventListener('input', (e) => changeCardWidth(e.target.value));
+    document.getElementById('setting-height-default').addEventListener('input', (e) => {
+        if (!appData.settings) appData.settings = {};
+        appData.settings.cardHeightDefault = parseInt(e.target.value) || 85;
+        updateGridWidth();
+    });
+    document.getElementById('setting-height-colorful').addEventListener('input', (e) => {
+        if (!appData.settings) appData.settings = {};
+        appData.settings.cardHeightColorful = parseInt(e.target.value) || 85;
+        updateGridWidth();
+    });
     document.getElementById('setting-theme').addEventListener('change', (e) => {
         themeMode = e.target.value;
         localStorage.setItem('nav_theme_mode', themeMode);
@@ -1453,6 +1487,18 @@ const manageCats = () => {
         simpleMode = e.target.checked;
         localStorage.setItem('nav_simple_mode', simpleMode);
         document.body.classList.toggle('no-blur', simpleMode);
+    });
+
+    document.getElementById('setting-site-icon').addEventListener('input', (e) => {
+        if (!appData.settings) appData.settings = {};
+        appData.settings.siteIcon = e.target.value || '🌐';
+        updateSidebarHeader();
+    });
+
+    document.getElementById('setting-site-name').addEventListener('input', (e) => {
+        if (!appData.settings) appData.settings = {};
+        appData.settings.siteName = e.target.value || '个人导航';
+        updateSidebarHeader();
     });
 
     const bgColorPicker = document.getElementById('setting-bg-color');
@@ -1514,6 +1560,17 @@ const changeCardWidth = (val) => {
     if (!appData.settings) appData.settings = {};
     appData.settings.cardWidth = parseInt(val) || 85;
     updateGridWidth();
+};
+
+const updateSidebarHeader = () => {
+    const logo = document.getElementById('sidebar-logo');
+    const title = document.getElementById('sidebar-title');
+    if (logo && title) {
+        const icon = (appData.settings && appData.settings.siteIcon) || '🌐';
+        const name = (appData.settings && appData.settings.siteName) || '个人导航';
+        logo.textContent = icon;
+        title.textContent = name;
+    }
 };
 
 const updateCatData = (id, field, val) => {

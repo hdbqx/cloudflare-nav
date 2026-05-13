@@ -25,6 +25,8 @@
     --radius: 15px;
     --card-w: 85px;
     --card-h: 85px;
+    --card-h-default: 85px;
+    --card-h-colorful: 85px;
 
     /* 背景遮罩透明度 */
     --bg-overlay-opacity: 0.4;
@@ -446,10 +448,6 @@ body::before {
     color: var(--text);
     padding: 8px 4px 10px;
     margin-bottom: 12px;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    background: inherit;
 }
 
 .category-section-title .cat-icon {
@@ -546,8 +544,8 @@ body::before {
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     position: relative;
     cursor: pointer;
-    min-height: var(--card-h, 85px);
-    height: var(--card-h, 85px);
+    min-height: var(--card-h-default, 85px);
+    height: var(--card-h-default, 85px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -580,11 +578,12 @@ body::before {
     width: 100%;
     height: 100%;
     object-fit: contain;
-    filter: blur(20px) saturate(4.5) brightness(1.6) contrast(1.5);
+    filter: blur(25px) saturate(4) brightness(1.4) contrast(1.5);
     scale: 2.8;
-    opacity: 0.28;
+    opacity: 0.2;
     transition: opacity 0.35s ease-out;
     will-change: transform, filter;
+    translate: calc(var(--pointer-x, -10) * 40%) calc(var(--pointer-y, -10) * 40%);
 }
 
 .card .card-glow-bg .glow-emoji {
@@ -595,99 +594,98 @@ body::before {
     justify-content: center;
     font-size: 60px;
     scale: 2.8;
-    filter: blur(18px) saturate(5.5) brightness(1.7);
+    filter: blur(25px) saturate(4) brightness(1.4) contrast(1.5);
     color: var(--icon-color, #3b82f6);
-    opacity: 0.28;
+    opacity: 0.2;
     transition: opacity 0.35s ease-out;
     will-change: transform, filter;
+    translate: calc(var(--pointer-x, -10) * 40%) calc(var(--pointer-y, -10) * 40%);
 }
 
 /* 非悬停时保留微光但明显可见 */
 .card:not(:hover) .card-glow-bg img,
 .card:not(:hover) .card-glow-bg .glow-emoji {
-    opacity: calc(0.28 * 0.35);
+    opacity: calc(0.2 * 0.3);
     transition: opacity 0.4s ease-out;
 }
 
 /* 悬停时大幅增强扩散光 */
 .card[data-color-ready]:hover .card-glow-bg img,
 .card[data-color-ready]:hover .card-glow-bg .glow-emoji {
-    opacity: 0.4;
+    opacity: 0.3;
 }
 
-/* 亮色模式下光晕更柔和但依然明显 */
+/* 亮色模式下光晕更柔和但明显可见 */
 body.light-theme .card .card-glow-bg img,
 body.light-theme .card .card-glow-bg .glow-emoji {
-    filter: blur(22px) saturate(3.5) brightness(1.4) contrast(1.3);
-    opacity: 0.18;
+    filter: blur(20px) saturate(3) brightness(1.2) contrast(1.3);
+    opacity: 0.15;
 }
 
 body.light-theme .card:not(:hover) .card-glow-bg img,
 body.light-theme .card:not(:hover) .card-glow-bg .glow-emoji {
-    opacity: calc(0.18 * 0.35);
+    opacity: calc(0.15 * 0.3);
 }
 
 body.light-theme .card[data-color-ready]:hover .card-glow-bg img,
 body.light-theme .card[data-color-ready]:hover .card-glow-bg .glow-emoji {
-    opacity: 0.28;
+    opacity: 0.2;
 }
 
-/* 暗色模式下光晕更强烈 */
+/* 暗色模式下光晕稍强（默认值即暗色，此处作为保障） */
 .dark-theme .card .card-glow-bg img,
 .dark-theme .card .card-glow-bg .glow-emoji {
-    filter: blur(28px) saturate(5.5) brightness(1.7) contrast(1.7);
-    opacity: 0.32;
+    filter: blur(25px) saturate(4) brightness(1.4) contrast(1.5);
+    opacity: 0.2;
 }
 
 .dark-theme .card:not(:hover) .card-glow-bg img,
 .dark-theme .card:not(:hover) .card-glow-bg .glow-emoji {
-    opacity: calc(0.32 * 0.35);
+    opacity: calc(0.2 * 0.3);
 }
 
 .dark-theme .card[data-color-ready]:hover .card-glow-bg img,
 .dark-theme .card[data-color-ready]:hover .card-glow-bg .glow-emoji {
-    opacity: 0.45;
+    opacity: 0.3;
 }
 
-/* 悬停边框 + 阴影 — 轮廓光（与图标主色一致，更强更鲜艳） */
+/* 悬停边框 + 阴影 — 轮廓光 */
 .card[data-color-ready]:hover {
-    border-color: rgba(var(--icon-color-rgb), 0.8) !important;
-    box-shadow:
-        0 0 0 1.5px rgba(var(--icon-color-rgb), 0.5),
-        0 0 20px -4px rgba(var(--icon-color-rgb), 0.4),
-        0 12px 35px -6px rgba(var(--icon-color-rgb), 0.35),
-        0 4px 12px -4px rgba(var(--icon-color-rgb), 0.2);
-}
-
-/* 亮色模式下阴影较浅但边框颜色与图标主色一致 */
-body.light-theme .card[data-color-ready]:hover {
-    border-color: rgba(var(--icon-color-rgb), 0.7) !important;
+    border-color: rgba(var(--icon-color-rgb), 0.6) !important;
     box-shadow:
         0 0 0 1.5px rgba(var(--icon-color-rgb), 0.4),
-        0 0 16px -4px rgba(var(--icon-color-rgb), 0.3),
-        0 10px 25px -6px rgba(var(--icon-color-rgb), 0.2);
+        0 0 20px -4px rgba(var(--icon-color-rgb), 0.3),
+        0 12px 35px -6px rgba(var(--icon-color-rgb), 0.15);
 }
 
-/* 暗色模式下光晕最强，边框颜色最深 */
+/* 亮色模式下阴影较浅 */
+body.light-theme .card[data-color-ready]:hover {
+    border-color: rgba(var(--icon-color-rgb), 0.5) !important;
+    box-shadow:
+        0 0 0 1.5px rgba(var(--icon-color-rgb), 0.3),
+        0 0 16px -4px rgba(var(--icon-color-rgb), 0.2),
+        0 10px 25px -6px rgba(var(--icon-color-rgb), 0.1);
+}
+
+/* 暗色模式下稍强 */
 .dark-theme .card[data-color-ready]:hover {
-    border-color: rgba(var(--icon-color-rgb), 0.9) !important;
+    border-color: rgba(var(--icon-color-rgb), 0.6) !important;
     box-shadow:
-        0 0 0 1.5px rgba(var(--icon-color-rgb), 0.6),
-        0 0 24px -4px rgba(var(--icon-color-rgb), 0.5),
-        0 12px 30px -6px rgba(var(--icon-color-rgb), 0.4),
-        0 4px 12px -4px rgba(var(--icon-color-rgb), 0.2);
+        0 0 0 1.5px rgba(var(--icon-color-rgb), 0.4),
+        0 0 24px -4px rgba(var(--icon-color-rgb), 0.3),
+        0 12px 30px -6px rgba(var(--icon-color-rgb), 0.15);
 }
 
-/* 无颜色数据时的回退蓝色光晕（加深） */
+/* 无颜色数据时的回退蓝色光晕 */
 .card:not([data-color-ready]):hover {
-    border-color: rgba(59, 130, 246, 0.65) !important;
+    border-color: rgba(59, 130, 246, 0.5) !important;
     box-shadow:
-        0 0 0 1.5px rgba(59, 130, 246, 0.4),
-        0 0 18px -4px rgba(59, 130, 246, 0.3),
-        0 10px 25px -5px rgba(59, 130, 246, 0.2);
+        0 0 0 1.5px rgba(59, 130, 246, 0.3),
+        0 0 18px -4px rgba(59, 130, 246, 0.2),
+        0 10px 25px -5px rgba(59, 130, 246, 0.15);
 }
 
-/* 鼠标跟随径向渐变 — 聚光效果（加深） */
+/* 鼠标跟随径向渐变 — 聚光效果 */
 .card .card-glow-bg::after {
     content: '';
     position: absolute;
@@ -698,10 +696,10 @@ body.light-theme .card[data-color-ready]:hover {
     opacity: 0;
     transition: opacity 0.35s ease-out;
     background: radial-gradient(
-        700px circle
+        800px circle
         at calc(var(--pointer-x, 0.5) * 100%) calc(var(--pointer-y, 0.5) * 100%),
-        rgba(var(--icon-color-rgb), 0.18) 0%,
-        rgba(var(--icon-color-rgb), 0.08) 20%,
+        rgba(var(--icon-color-rgb), 0.15) 0%,
+        rgba(var(--icon-color-rgb), 0.06) 20%,
         transparent 40%
     );
 }
@@ -710,43 +708,42 @@ body.light-theme .card[data-color-ready]:hover {
     opacity: 1;
 }
 
-/* 暗色模式下聚光更强 */
+/* 暗色模式下聚光稍强 */
 .dark-theme .card .card-glow-bg::after {
     background: radial-gradient(
-        700px circle
+        800px circle
         at calc(var(--pointer-x, 0.5) * 100%) calc(var(--pointer-y, 0.5) * 100%),
-        rgba(var(--icon-color-rgb), 0.3) 0%,
-        rgba(var(--icon-color-rgb), 0.12) 20%,
+        rgba(var(--icon-color-rgb), 0.15) 0%,
+        rgba(var(--icon-color-rgb), 0.06) 20%,
         transparent 40%
     );
 }
 
 body.light-theme .card .card-glow-bg::after {
     background: radial-gradient(
-        700px circle
+        800px circle
         at calc(var(--pointer-x, 0.5) * 100%) calc(var(--pointer-y, 0.5) * 100%),
-        rgba(var(--icon-color-rgb), 0.12) 0%,
-        rgba(var(--icon-color-rgb), 0.05) 20%,
+        rgba(var(--icon-color-rgb), 0.1) 0%,
+        rgba(var(--icon-color-rgb), 0.04) 20%,
         transparent 40%
     );
 }
 
-/* 缤纷模式下的光晕适配（加深） */
+/* 缤纷模式下的光晕适配 */
 body.view-style-2 .card[data-color-ready]:hover {
-    border-color: rgba(var(--icon-color-rgb), 0.75) !important;
+    border-color: rgba(var(--icon-color-rgb), 0.55) !important;
     box-shadow:
-        0 0 0 1.5px rgba(var(--icon-color-rgb), 0.5),
-        0 0 18px -4px rgba(var(--icon-color-rgb), 0.35),
-        0 12px 30px -6px rgba(var(--icon-color-rgb), 0.3),
-        0 4px 12px -4px rgba(var(--icon-color-rgb), 0.15);
+        0 0 0 1.5px rgba(var(--icon-color-rgb), 0.35),
+        0 0 18px -4px rgba(var(--icon-color-rgb), 0.25),
+        0 12px 30px -6px rgba(var(--icon-color-rgb), 0.2);
 }
 
 body.view-style-2 .card.has-bg[data-color-ready]:hover {
-    border-color: rgba(var(--icon-color-rgb), 0.7) !important;
+    border-color: rgba(var(--icon-color-rgb), 0.5) !important;
     box-shadow:
-        0 0 0 1.5px rgba(var(--icon-color-rgb), 0.45),
-        0 0 16px -4px rgba(var(--icon-color-rgb), 0.3),
-        0 10px 24px -5px rgba(var(--icon-color-rgb), 0.25);
+        0 0 0 1.5px rgba(var(--icon-color-rgb), 0.3),
+        0 0 16px -4px rgba(var(--icon-color-rgb), 0.2),
+        0 10px 24px -5px rgba(var(--icon-color-rgb), 0.15);
 }
 
 /* 卡片内容层确保在光晕之上 */
@@ -763,6 +760,13 @@ body.view-style-2 .card.has-bg[data-color-ready]:hover {
 @media (prefers-reduced-motion: reduce) {
     .card .card-glow-bg img,
     .card .card-glow-bg .glow-emoji {
+        will-change: auto;
+        transition: none;
+    }
+    .card:hover .icon-wrapper {
+        transform: none;
+    }
+    .icon-wrapper {
         transition: none;
     }
     .card[data-color-ready]:hover {
@@ -770,28 +774,28 @@ body.view-style-2 .card.has-bg[data-color-ready]:hover {
     }
 }
 
-/* 移动端光晕适当增强 */
+/* 移动端光晕适当减弱 */
 @media (max-width: 768px) {
     .card .card-glow-bg img,
     .card .card-glow-bg .glow-emoji {
         scale: 2.4;
-        filter: blur(16px) saturate(3) brightness(1.3);
-        opacity: 0.18;
+        filter: blur(15px) saturate(2) brightness(1.1);
+        opacity: 0.12;
     }
     .card:not(:hover) .card-glow-bg img,
     .card:not(:hover) .card-glow-bg .glow-emoji {
-        opacity: calc(0.18 * 0.35);
+        opacity: calc(0.12 * 0.3);
     }
     .card[data-color-ready]:hover .card-glow-bg img,
     .card[data-color-ready]:hover .card-glow-bg .glow-emoji {
-        opacity: 0.28;
+        opacity: 0.2;
     }
     .card[data-color-ready]:hover {
-        border-color: rgba(var(--icon-color-rgb), 0.6) !important;
+        border-color: rgba(var(--icon-color-rgb), 0.45) !important;
         box-shadow:
-            0 0 0 1.5px rgba(var(--icon-color-rgb), 0.35),
-            0 0 14px -4px rgba(var(--icon-color-rgb), 0.25),
-            0 6px 18px -4px rgba(var(--icon-color-rgb), 0.18);
+            0 0 0 1.5px rgba(var(--icon-color-rgb), 0.3),
+            0 0 12px -4px rgba(var(--icon-color-rgb), 0.2),
+            0 6px 16px -4px rgba(var(--icon-color-rgb), 0.12);
     }
 }
 
@@ -875,6 +879,11 @@ body.view-style-2 .card.has-bg[data-color-ready]:hover {
     align-items: center;
     justify-content: center;
     margin: 2px auto 6px auto;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card:hover .icon-wrapper {
+    transform: scale(1.05);
 }
 
 .card img {
@@ -1398,6 +1407,8 @@ body.view-style-2 .card {
     box-shadow: none;
     justify-content: flex-start;
     transition: all 0.25s ease;
+    min-height: var(--card-h-colorful, 85px);
+    height: var(--card-h-colorful, 85px);
 }
 
 body.view-style-2 .card.has-bg {
@@ -1883,6 +1894,8 @@ body.view-style-2 .card[data-tooltip]::before {
     :root {
         --card-w: 80px;
         --card-h: 80px;
+        --card-h-default: 80px;
+        --card-h-colorful: 80px;
     }
 
     .video-grid {
@@ -1894,6 +1907,8 @@ body.view-style-2 .card[data-tooltip]::before {
     :root {
         --card-w: 75px;
         --card-h: 75px;
+        --card-h-default: 75px;
+        --card-h-colorful: 75px;
         --sidebar-width: 250px;
     }
 
@@ -1942,6 +1957,8 @@ body.view-style-2 .card[data-tooltip]::before {
     :root {
         --card-w: 70px;
         --card-h: 70px;
+        --card-h-default: 70px;
+        --card-h-colorful: 70px;
     }
 
     .main-content {
