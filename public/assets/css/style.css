@@ -580,10 +580,10 @@ body::before {
     width: 100%;
     height: 100%;
     object-fit: contain;
-    filter: blur(20px) saturate(3) brightness(1.2) contrast(1.3);
+    filter: blur(20px) saturate(4.5) brightness(1.6) contrast(1.5);
     scale: 2.8;
-    opacity: 0.15;
-    transition: opacity 0.3s ease-out;
+    opacity: 0.28;
+    transition: opacity 0.35s ease-out;
     will-change: transform, filter;
 }
 
@@ -595,95 +595,99 @@ body::before {
     justify-content: center;
     font-size: 60px;
     scale: 2.8;
-    filter: blur(18px) saturate(4) brightness(1.3);
+    filter: blur(18px) saturate(5.5) brightness(1.7);
     color: var(--icon-color, #3b82f6);
-    opacity: 0.15;
-    transition: opacity 0.3s ease-out;
+    opacity: 0.28;
+    transition: opacity 0.35s ease-out;
     will-change: transform, filter;
 }
 
-/* 非悬停时减弱但保留微光（与 favorite-main 一致） */
+/* 非悬停时保留微光但明显可见 */
 .card:not(:hover) .card-glow-bg img,
 .card:not(:hover) .card-glow-bg .glow-emoji {
-    opacity: calc(0.15 * 0.3);
+    opacity: calc(0.28 * 0.35);
     transition: opacity 0.4s ease-out;
 }
 
-/* 悬停时增强扩散光 */
+/* 悬停时大幅增强扩散光 */
 .card[data-color-ready]:hover .card-glow-bg img,
 .card[data-color-ready]:hover .card-glow-bg .glow-emoji {
-    opacity: 0.15;
+    opacity: 0.4;
 }
 
-/* 亮色模式下光晕更柔和 */
+/* 亮色模式下光晕更柔和但依然明显 */
 body.light-theme .card .card-glow-bg img,
 body.light-theme .card .card-glow-bg .glow-emoji {
-    filter: blur(22px) saturate(2) brightness(1.1) contrast(1.1);
-    opacity: 0.1;
+    filter: blur(22px) saturate(3.5) brightness(1.4) contrast(1.3);
+    opacity: 0.18;
 }
 
 body.light-theme .card:not(:hover) .card-glow-bg img,
 body.light-theme .card:not(:hover) .card-glow-bg .glow-emoji {
-    opacity: calc(0.1 * 0.3);
+    opacity: calc(0.18 * 0.35);
 }
 
 body.light-theme .card[data-color-ready]:hover .card-glow-bg img,
 body.light-theme .card[data-color-ready]:hover .card-glow-bg .glow-emoji {
-    opacity: 0.1;
+    opacity: 0.28;
 }
 
-/* 暗色模式下光晕更强（与 favorite-main dark 一致） */
+/* 暗色模式下光晕更强烈 */
 .dark-theme .card .card-glow-bg img,
 .dark-theme .card .card-glow-bg .glow-emoji {
-    filter: blur(25px) saturate(4) brightness(1.4) contrast(1.5);
-    opacity: 0.2;
+    filter: blur(28px) saturate(5.5) brightness(1.7) contrast(1.7);
+    opacity: 0.32;
 }
 
 .dark-theme .card:not(:hover) .card-glow-bg img,
 .dark-theme .card:not(:hover) .card-glow-bg .glow-emoji {
-    opacity: calc(0.2 * 0.3);
+    opacity: calc(0.32 * 0.35);
 }
 
 .dark-theme .card[data-color-ready]:hover .card-glow-bg img,
 .dark-theme .card[data-color-ready]:hover .card-glow-bg .glow-emoji {
-    opacity: 0.2;
+    opacity: 0.45;
 }
 
-/* 悬停边框 + 阴影 — 轮廓光（对齐 favorite-main 强度） */
+/* 悬停边框 + 阴影 — 轮廓光（与图标主色一致，更强更鲜艳） */
 .card[data-color-ready]:hover {
-    border-color: rgba(var(--icon-color-rgb), 0.5) !important;
+    border-color: rgba(var(--icon-color-rgb), 0.8) !important;
     box-shadow:
-        0 0 0 1px rgba(var(--icon-color-rgb), 0.3),
-        0 10px 25px -5px rgba(var(--icon-color-rgb), 0.2),
-        0 4px 10px -4px rgba(var(--icon-color-rgb), 0.1);
+        0 0 0 1.5px rgba(var(--icon-color-rgb), 0.5),
+        0 0 20px -4px rgba(var(--icon-color-rgb), 0.4),
+        0 12px 35px -6px rgba(var(--icon-color-rgb), 0.35),
+        0 4px 12px -4px rgba(var(--icon-color-rgb), 0.2);
 }
 
-/* 亮色模式下阴影较浅但边框仍然明显 */
+/* 亮色模式下阴影较浅但边框颜色与图标主色一致 */
 body.light-theme .card[data-color-ready]:hover {
-    border-color: rgba(var(--icon-color-rgb), 0.4) !important;
+    border-color: rgba(var(--icon-color-rgb), 0.7) !important;
     box-shadow:
-        0 0 0 1px rgba(var(--icon-color-rgb), 0.2),
-        0 8px 20px -5px rgba(var(--icon-color-rgb), 0.12);
+        0 0 0 1.5px rgba(var(--icon-color-rgb), 0.4),
+        0 0 16px -4px rgba(var(--icon-color-rgb), 0.3),
+        0 10px 25px -6px rgba(var(--icon-color-rgb), 0.2);
 }
 
-/* 暗色模式下光晕最强 */
+/* 暗色模式下光晕最强，边框颜色最深 */
 .dark-theme .card[data-color-ready]:hover {
-    border-color: rgba(var(--icon-color-rgb), 0.6) !important;
+    border-color: rgba(var(--icon-color-rgb), 0.9) !important;
     box-shadow:
-        0 0 0 1px rgba(var(--icon-color-rgb), 0.4),
-        0 10px 25px -5px rgba(var(--icon-color-rgb), 0.3),
-        0 4px 10px -4px rgba(var(--icon-color-rgb), 0.15);
+        0 0 0 1.5px rgba(var(--icon-color-rgb), 0.6),
+        0 0 24px -4px rgba(var(--icon-color-rgb), 0.5),
+        0 12px 30px -6px rgba(var(--icon-color-rgb), 0.4),
+        0 4px 12px -4px rgba(var(--icon-color-rgb), 0.2);
 }
 
-/* 无颜色数据时的回退蓝色光晕 */
+/* 无颜色数据时的回退蓝色光晕（加深） */
 .card:not([data-color-ready]):hover {
-    border-color: rgba(59, 130, 246, 0.4) !important;
+    border-color: rgba(59, 130, 246, 0.65) !important;
     box-shadow:
-        0 0 0 1px rgba(59, 130, 246, 0.2),
-        0 10px 25px -5px rgba(59, 130, 246, 0.15);
+        0 0 0 1.5px rgba(59, 130, 246, 0.4),
+        0 0 18px -4px rgba(59, 130, 246, 0.3),
+        0 10px 25px -5px rgba(59, 130, 246, 0.2);
 }
 
-/* 鼠标跟随径向渐变 — 聚光效果（放在 glow-bg 容器内，避免与 tooltip 伪元素冲突） */
+/* 鼠标跟随径向渐变 — 聚光效果（加深） */
 .card .card-glow-bg::after {
     content: '';
     position: absolute;
@@ -692,12 +696,12 @@ body.light-theme .card[data-color-ready]:hover {
     pointer-events: none;
     z-index: 1;
     opacity: 0;
-    transition: opacity 0.3s ease-out;
+    transition: opacity 0.35s ease-out;
     background: radial-gradient(
-        800px circle
+        700px circle
         at calc(var(--pointer-x, 0.5) * 100%) calc(var(--pointer-y, 0.5) * 100%),
-        rgba(var(--icon-color-rgb), 0.1) 0%,
-        rgba(var(--icon-color-rgb), 0.04) 20%,
+        rgba(var(--icon-color-rgb), 0.18) 0%,
+        rgba(var(--icon-color-rgb), 0.08) 20%,
         transparent 40%
     );
 }
@@ -709,38 +713,40 @@ body.light-theme .card[data-color-ready]:hover {
 /* 暗色模式下聚光更强 */
 .dark-theme .card .card-glow-bg::after {
     background: radial-gradient(
-        800px circle
+        700px circle
         at calc(var(--pointer-x, 0.5) * 100%) calc(var(--pointer-y, 0.5) * 100%),
-        rgba(var(--icon-color-rgb), 0.15) 0%,
-        rgba(var(--icon-color-rgb), 0.06) 20%,
+        rgba(var(--icon-color-rgb), 0.3) 0%,
+        rgba(var(--icon-color-rgb), 0.12) 20%,
         transparent 40%
     );
 }
 
 body.light-theme .card .card-glow-bg::after {
     background: radial-gradient(
-        800px circle
+        700px circle
         at calc(var(--pointer-x, 0.5) * 100%) calc(var(--pointer-y, 0.5) * 100%),
-        rgba(var(--icon-color-rgb), 0.06) 0%,
-        rgba(var(--icon-color-rgb), 0.02) 20%,
+        rgba(var(--icon-color-rgb), 0.12) 0%,
+        rgba(var(--icon-color-rgb), 0.05) 20%,
         transparent 40%
     );
 }
 
-/* 缤纷模式下的光晕适配 */
+/* 缤纷模式下的光晕适配（加深） */
 body.view-style-2 .card[data-color-ready]:hover {
-    border-color: rgba(var(--icon-color-rgb), 0.5) !important;
+    border-color: rgba(var(--icon-color-rgb), 0.75) !important;
     box-shadow:
-        0 0 0 1px rgba(var(--icon-color-rgb), 0.3),
-        0 10px 25px -5px rgba(var(--icon-color-rgb), 0.2),
-        0 4px 10px -4px rgba(var(--icon-color-rgb), 0.1);
+        0 0 0 1.5px rgba(var(--icon-color-rgb), 0.5),
+        0 0 18px -4px rgba(var(--icon-color-rgb), 0.35),
+        0 12px 30px -6px rgba(var(--icon-color-rgb), 0.3),
+        0 4px 12px -4px rgba(var(--icon-color-rgb), 0.15);
 }
 
 body.view-style-2 .card.has-bg[data-color-ready]:hover {
-    border-color: rgba(var(--icon-color-rgb), 0.45) !important;
+    border-color: rgba(var(--icon-color-rgb), 0.7) !important;
     box-shadow:
-        0 0 0 1px rgba(var(--icon-color-rgb), 0.25),
-        0 8px 20px -3px rgba(var(--icon-color-rgb), 0.18);
+        0 0 0 1.5px rgba(var(--icon-color-rgb), 0.45),
+        0 0 16px -4px rgba(var(--icon-color-rgb), 0.3),
+        0 10px 24px -5px rgba(var(--icon-color-rgb), 0.25);
 }
 
 /* 卡片内容层确保在光晕之上 */
@@ -764,27 +770,28 @@ body.view-style-2 .card.has-bg[data-color-ready]:hover {
     }
 }
 
-/* 移动端减少光晕强度 */
+/* 移动端光晕适当增强 */
 @media (max-width: 768px) {
     .card .card-glow-bg img,
     .card .card-glow-bg .glow-emoji {
-        scale: 2.2;
-        filter: blur(15px) saturate(2) brightness(1.1);
-        opacity: 0.1;
+        scale: 2.4;
+        filter: blur(16px) saturate(3) brightness(1.3);
+        opacity: 0.18;
     }
     .card:not(:hover) .card-glow-bg img,
     .card:not(:hover) .card-glow-bg .glow-emoji {
-        opacity: calc(0.1 * 0.3);
+        opacity: calc(0.18 * 0.35);
     }
     .card[data-color-ready]:hover .card-glow-bg img,
     .card[data-color-ready]:hover .card-glow-bg .glow-emoji {
-        opacity: 0.1;
+        opacity: 0.28;
     }
     .card[data-color-ready]:hover {
-        border-color: rgba(var(--icon-color-rgb), 0.35) !important;
+        border-color: rgba(var(--icon-color-rgb), 0.6) !important;
         box-shadow:
-            0 0 0 1px rgba(var(--icon-color-rgb), 0.2),
-            0 4px 15px -3px rgba(var(--icon-color-rgb), 0.12);
+            0 0 0 1.5px rgba(var(--icon-color-rgb), 0.35),
+            0 0 14px -4px rgba(var(--icon-color-rgb), 0.25),
+            0 6px 18px -4px rgba(var(--icon-color-rgb), 0.18);
     }
 }
 
