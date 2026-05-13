@@ -104,6 +104,10 @@ body.light-theme .modal-content {
     border-color: rgba(0, 0, 0, 0.08);
 }
 
+body.light-theme .modal-content::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.12);
+}
+
 body.light-theme input,
 body.light-theme select {
     background: rgba(255, 255, 255, 0.7);
@@ -941,9 +945,12 @@ body.view-style-2 .card.has-bg[data-color-ready]:hover {
 /* ==================== 侧边栏样式切换器 ==================== */
 .sidebar-style-switcher {
     display: flex;
-    gap: 4px;
-    padding: 0 4px;
+    gap: 2px;
+    padding: 3px;
     margin-bottom: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 25px;
+    border: 1px solid var(--glass-border);
 }
 
 .sidebar-style-btn {
@@ -951,10 +958,10 @@ body.view-style-2 .card.has-bg[data-color-ready]:hover {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 5px;
-    padding: 7px 0;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.06);
+    gap: 4px;
+    padding: 5px 10px;
+    border-radius: 25px;
+    background: transparent;
     border: 1px solid transparent;
     color: var(--text-dim);
     cursor: pointer;
@@ -965,11 +972,11 @@ body.view-style-2 .card.has-bg[data-color-ready]:hover {
 }
 
 .sidebar-style-btn i {
-    font-size: 14px;
+    font-size: 13px;
 }
 
 .sidebar-style-btn:hover:not(.active) {
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.08);
     color: var(--text);
 }
 
@@ -987,6 +994,11 @@ body.view-style-2 .card.has-bg[data-color-ready]:hover {
 }
 
 /* 亮色模式 - 侧边栏样式切换器 */
+body.light-theme .sidebar-style-switcher {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.08);
+}
+
 body.light-theme .sidebar-style-btn {
     color: #666;
 }
@@ -1025,6 +1037,21 @@ body.light-theme .sidebar-style-btn.active {
     border: 1px solid rgba(255, 255, 255, 0.1);
     position: relative;
     backdrop-filter: blur(15px);
+    max-height: 85vh;
+    overflow-y: auto;
+}
+
+.modal-content::-webkit-scrollbar {
+    width: 4px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
 }
 
 /* ==================== 表单元素 ==================== */
