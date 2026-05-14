@@ -9,7 +9,7 @@
  */
 
 // ==================== 全局变量定义 ====================
-let appData = { settings: { cardWidth: 85, siteName: '个人导航', siteIcon: '🌐', cardHeightDefault: 85, cardHeightColorful: 85 }, categories: [], items: [] };
+let appData = { settings: { siteName: '个人导航', siteIcon: '🌐', cardHeightDefault: 85, cardHeightColorful: 85 }, categories: [], items: [] };
 let activeCatId = '';
 let sysToken = localStorage.getItem('nav_token') || '';
 let isAdmin = false;
@@ -382,9 +382,9 @@ const toggleSimpleMode = () => {
 
 // ==================== 核心函数 ====================
 const updateGridWidth = () => {
-    const width = (appData.settings && appData.settings.cardWidth) ? appData.settings.cardWidth : 85;
-    document.documentElement.style.setProperty('--card-w', width + 'px');
-    document.documentElement.style.setProperty('--card-h', width + 'px');
+    // 卡片宽度固定为 85px（由默认高度/缤纷高度独立控制卡片高度）
+    document.documentElement.style.setProperty('--card-w', '85px');
+    document.documentElement.style.setProperty('--card-h', '85px');
     // 默认样式与缤纷样式各自独立的高度
     const hDefault = (appData.settings && appData.settings.cardHeightDefault) ? appData.settings.cardHeightDefault : 85;
     const hColorful = (appData.settings && appData.settings.cardHeightColorful) ? appData.settings.cardHeightColorful : 85;
@@ -1570,7 +1570,6 @@ const manageCats = () => {
     editingType = 'cats';
     document.getElementById('edit-title').innerText = '偏好与分类设置';
 
-    const currentWidth = (appData.settings && appData.settings.cardWidth) ? appData.settings.cardWidth : 85;
     const currentBg = (appData.settings && appData.settings.bgUrl) ? appData.settings.bgUrl : '';
     const bgIsColor = /^#[0-9a-fA-F]{6}$/.test(currentBg);
 
@@ -1592,9 +1591,6 @@ const manageCats = () => {
         </div>
         <div class="form-row" style="margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
             <label>站点名称</label><input type="text" id="setting-site-name" value="${utils.escapeHTML(currentSiteName)}" placeholder="个人导航" style="flex:1; padding:5px">
-        </div>
-        <div class="form-row" style="margin-bottom: 10px;">
-            <label>网格宽度</label><input type="number" id="setting-width" value="${currentWidth}"><span style="color:#666; margin-left:10px;">px</span>
         </div>
         <div class="form-row" style="margin-bottom: 10px;">
             <label>默认高度</label><input type="number" id="setting-height-default" value="${currentDefaultHeight}"><span style="color:#666; margin-left:10px;">px</span>
@@ -1637,7 +1633,6 @@ const manageCats = () => {
         <button class="tab-btn active" id="btn-add-cat" style="width:100%; margin-top:15px">+ 新增分类</button>
     `;
 
-    document.getElementById('setting-width').addEventListener('input', (e) => changeCardWidth(e.target.value));
     document.getElementById('setting-height-default').addEventListener('input', (e) => {
         if (!appData.settings) appData.settings = {};
         appData.settings.cardHeightDefault = parseInt(e.target.value) || 85;
@@ -1724,12 +1719,6 @@ const manageCats = () => {
     });
 
     document.getElementById('edit-modal').style.display = 'flex';
-};
-
-const changeCardWidth = (val) => {
-    if (!appData.settings) appData.settings = {};
-    appData.settings.cardWidth = parseInt(val) || 85;
-    updateGridWidth();
 };
 
 const updateSidebarHeader = () => {

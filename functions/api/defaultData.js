@@ -6,7 +6,7 @@
  */
 
 export const defaultData = {
-  settings: { cardWidth: 90 },
+  settings: { },
   categories: [
     { id: "A01", name: "社交网站", icon: "💬", hidden: false },
     { id: "B01", name: "直播网站", icon: "💻", hidden: false },
