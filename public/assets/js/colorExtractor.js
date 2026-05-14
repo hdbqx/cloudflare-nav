@@ -34,7 +34,8 @@
 
     return new Promise(function (resolve) {
       var img = new Image();
-      img.crossOrigin = 'anonymous';
+      // 不使用 crossOrigin 避免 CORS 错误（favicon 服务通常不支持 CORS）
+      // 如果 canvas 被跨域污染，会在 getImageData 时静默降级
       var timeoutId = setTimeout(function () {
         img.src = '';
         resolve(null);
@@ -61,7 +62,7 @@
         try {
           imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         } catch (e) {
-          // CORS 限制导致 canvas 被污染
+          // CORS 限制导致 canvas 被污染，静默降级
           resolve(null);
           return;
         }

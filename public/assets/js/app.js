@@ -1139,60 +1139,44 @@ const initCardGlow = (container) => {
     const extractor = window.colorExtractor;
     if (!extractor) return;
 
-    cards.forEach(card => {
-        const item = appData.items.find(i => i.id === card.getAttribute('data-id'));
+    // 用队列控制并发数，避免同时发起大量请求导致雪崩
+    var queue = [];
+    var activeCount = 0;
+    var MAX_CONCURRENT = 6;
+
+    var processQueue = function () {
+        if (activeCount >= MAX_CONCURRENT || queue.length === 0) return;
+        activeCount++;
+        var task = queue.shift();
+        task().then(function () {
+            activeCount--;
+            processQueue();
+        }).catch(function () {
+            activeCount--;
+            processQueue();
+        });
+        // 尝试继续填充并发槽
+        if (activeCount < MAX_CONCURRENT && queue.length > 0) {
+            processQueue();
+        }
+    };
+
+    cards.forEach(function (card) {
+        var item = appData.items.find(function (i) { return i.id === card.getAttribute('data-id'); });
         if (!item) return;
 
-        const iconSrc = item.icon;
-        const isImgIcon = iconSrc && iconSrc.startsWith('http');
-        const title = item.title || '';
+        var iconSrc = item.icon;
+        var isImgIcon = iconSrc && iconSrc.startsWith('http');
+        var title = item.title || '';
 
-        /**
-         * 尝试从图片提取颜色，失败时尝试备用源或降级到文本色
-         */
-        const tryExtractColor = (src, fallbackToText) => {
-            extractor.extractColorFromImage(src)
-                .then(color => {
-                    if (color) {
-                        card.style.setProperty('--icon-color', color.hex);
-                        card.style.setProperty('--icon-color-rgb', color.rgb);
-                        card.setAttribute('data-color-ready', '');
-                    } else if (fallbackToText) {
-                        // 颜色提取无结果，尝试备用图标源
-                        const altSrc = item.url ? getAltFaviconUrl(src, item.url) : null;
-                        if (altSrc && altSrc !== src) {
-                            tryExtractColor(altSrc, true);
-                        } else {
-                            const fc = extractor.generateColorFromText(title);
-                            if (fc) {
-                                card.style.setProperty('--icon-color', fc.hex);
-                                card.style.setProperty('--icon-color-rgb', fc.rgb);
-                                card.setAttribute('data-color-ready', '');
-                            }
-                        }
-                    }
-                })
-                .catch(() => {
-                    // CORS 或其他错误：尝试备用图标源
-                    const altSrc = item.url ? getAltFaviconUrl(src, item.url) : null;
-                    if (altSrc && altSrc !== src) {
-                        tryExtractColor(altSrc, true);
-                    } else if (fallbackToText) {
-                        const fc = extractor.generateColorFromText(title);
-                        if (fc) {
-                            card.style.setProperty('--icon-color', fc.hex);
-                            card.style.setProperty('--icon-color-rgb', fc.rgb);
-                            card.setAttribute('data-color-ready', '');
-                        }
-                    }
-                });
-        };
+        // 记录已尝试的 URL，防止在两个图标源之间无限递归
+        var triedUrls = new Set();
 
         /**
          * 最终兜底：使用文本生成颜色
          */
-        const fallbackToTextColor = () => {
-            const fc = extractor.generateColorFromText(title);
+        var fallbackToTextColor = function () {
+            var fc = extractor.generateColorFromText(title);
             if (fc) {
                 card.style.setProperty('--icon-color', fc.hex);
                 card.style.setProperty('--icon-color-rgb', fc.rgb);
@@ -1200,11 +1184,55 @@ const initCardGlow = (container) => {
             }
         };
 
+        /**
+         * 尝试从图片提取颜色，失败时尝试备用源或降级到文本色
+         * @param {string} src - 要提取颜色的图片 URL
+         * @param {boolean} allowRetry - 是否允许尝试备用图标源
+         * @returns {Promise}
+         */
+        var tryExtractColor = function (src, allowRetry) {
+            // 已经尝试过这个 URL，直接回退到文本色
+            if (triedUrls.has(src)) {
+                fallbackToTextColor();
+                return Promise.resolve();
+            }
+            triedUrls.add(src);
+
+            return extractor.extractColorFromImage(src).then(function (color) {
+                if (color) {
+                    card.style.setProperty('--icon-color', color.hex);
+                    card.style.setProperty('--icon-color-rgb', color.rgb);
+                    card.setAttribute('data-color-ready', '');
+                } else if (allowRetry) {
+                    // 颜色提取无结果，尝试备用图标源
+                    var altSrc = item.url ? getAltFaviconUrl(src, item.url) : null;
+                    if (altSrc && altSrc !== src && !triedUrls.has(altSrc)) {
+                        return tryExtractColor(altSrc, true);
+                    } else {
+                        fallbackToTextColor();
+                    }
+                } else {
+                    fallbackToTextColor();
+                }
+            }).catch(function () {
+                // CORS 或其他错误：尝试备用图标源
+                var altSrc = item.url ? getAltFaviconUrl(src, item.url) : null;
+                if (altSrc && altSrc !== src && !triedUrls.has(altSrc)) {
+                    return tryExtractColor(altSrc, true);
+                } else {
+                    fallbackToTextColor();
+                }
+            });
+        };
+
         if (isImgIcon) {
-            tryExtractColor(iconSrc, true);
+            // 加入队列，控制并发
+            queue.push(function () {
+                return tryExtractColor(iconSrc, true);
+            });
         } else {
             // Emoji 或无图标：从文本生成颜色
-            const color = extractor.generateColorFromText(iconSrc || title);
+            var color = extractor.generateColorFromText(iconSrc || title);
             if (color) {
                 card.style.setProperty('--icon-color', color.hex);
                 card.style.setProperty('--icon-color-rgb', color.rgb);
@@ -1213,20 +1241,20 @@ const initCardGlow = (container) => {
         }
 
         // 鼠标跟踪（RAF 节流）
-        let rafId = null;
-        card.addEventListener('mousemove', (e) => {
+        var rafId = null;
+        card.addEventListener('mousemove', function (e) {
             if (rafId) return;
-            rafId = requestAnimationFrame(() => {
-                const rect = card.getBoundingClientRect();
-                const x = (e.clientX - rect.left) / rect.width;
-                const y = (e.clientY - rect.top) / rect.height;
+            rafId = requestAnimationFrame(function () {
+                var rect = card.getBoundingClientRect();
+                var x = (e.clientX - rect.left) / rect.width;
+                var y = (e.clientY - rect.top) / rect.height;
                 card.style.setProperty('--pointer-x', x.toFixed(3));
                 card.style.setProperty('--pointer-y', y.toFixed(3));
                 rafId = null;
             });
         });
 
-        card.addEventListener('mouseleave', () => {
+        card.addEventListener('mouseleave', function () {
             if (rafId) {
                 cancelAnimationFrame(rafId);
                 rafId = null;
@@ -1235,6 +1263,9 @@ const initCardGlow = (container) => {
             card.style.setProperty('--pointer-y', '0.5');
         });
     });
+
+    // 启动队列处理
+    processQueue();
 };
 
 // ==================== 滚动监听（自动高亮侧边栏） ====================
