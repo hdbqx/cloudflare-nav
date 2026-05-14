@@ -555,11 +555,13 @@ body::before {
     justify-content: center;
     width: 100%;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    z-index: 1;
 }
 
 .card:hover {
     background: var(--glass-hover);
     transform: translateY(-2px);
+    z-index: 5;
 }
 
 /* ==================== 卡片悬停彩色光晕效果 ==================== */
@@ -1429,7 +1431,7 @@ body.view-style-2 .nav-grid {
 
 body.view-style-2 .card {
     border-radius: var(--radius);
-    background: transparent;
+    background: var(--glass);
     border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: none;
     justify-content: flex-start;
@@ -1451,7 +1453,15 @@ body.view-style-2 .card.has-bg:hover {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
-body.view-style-2 .card:not(.has-bg):hover {
+body.view-style-2 .card:not(.has-bg)[data-color-ready]:hover {
+    background: rgba(var(--icon-color-rgb), 0.18);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    transform: translateY(-2px);
+}
+
+body.view-style-2 .card:not(.has-bg):not([data-color-ready]):hover {
     background: rgba(110, 115, 135, 0.32);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
