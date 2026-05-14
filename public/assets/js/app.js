@@ -136,7 +136,7 @@ const hashPassword = async (password) => {
 
 // ==================== 初始化入口 ====================
 document.addEventListener('DOMContentLoaded', () => {
-    // 注册 Service Worker
+    // 注册 Service Worker（在 load 事件后注册，不阻塞页面加载）
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('/ServiceWorker.js')
@@ -164,6 +164,11 @@ document.addEventListener('DOMContentLoaded', () => {
     initVideoModal();
     initMonacoModal();
     init();
+
+    // 页面完全加载后确保隐藏加载遮罩（安全兜底）
+    window.addEventListener('load', () => {
+        hideLoader();
+    });
 });
 
 // ==================== 侧边栏初始化 ====================
@@ -230,34 +235,49 @@ const initMonacoModal = () => {
 };
 
 const openMonacoEditor = () => {
-    document.getElementById('monaco-modal').style.display = 'flex';
+    const modal = document.getElementById('monaco-modal');
+    const container = document.getElementById('monaco-container');
+    modal.style.display = 'flex';
 
     if (monacoEditor) {
         monacoEditor.setValue(JSON.stringify(getCleanAppData(), null, 2));
         return;
     }
 
-    require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
-    require(['vs/editor/editor.main'], () => {
-        monacoEditor = monaco.editor.create(document.getElementById('monaco-container'), {
-            value: JSON.stringify(getCleanAppData(), null, 2),
-            language: 'json',
-            theme: 'vs-dark',
-            automaticLayout: true,
-            minimap: { enabled: true },
-            fontSize: 14,
-            lineNumbers: 'on',
-            scrollBeyondLastLine: false,
-            wordWrap: 'on',
-            tabSize: 2,
-            formatOnPaste: true,
-            formatOnType: true
+    // 显示加载提示在容器中
+    container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#aaa;font-size:14px;"><i class="ri-loader-4-line" style="animation:spin 1s linear infinite;margin-right:8px;"></i>正在加载代码编辑器...</div>';
+
+    // 动态加载 Monaco Editor loader 脚本（按需加载，不阻塞页面初始加载）
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js';
+    script.onload = () => {
+        require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
+        require(['vs/editor/editor.main'], () => {
+            container.innerHTML = '';
+            monacoEditor = monaco.editor.create(container, {
+                value: JSON.stringify(getCleanAppData(), null, 2),
+                language: 'json',
+                theme: 'vs-dark',
+                automaticLayout: true,
+                minimap: { enabled: true },
+                fontSize: 14,
+                lineNumbers: 'on',
+                scrollBeyondLastLine: false,
+                wordWrap: 'on',
+                tabSize: 2,
+                formatOnPaste: true,
+                formatOnType: true
+            });
+            // 注册格式化快捷键
+            monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+                saveMonacoData();
+            });
         });
-        // 注册格式化快捷键
-        monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-            saveMonacoData();
-        });
-    });
+    };
+    script.onerror = () => {
+        container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#e74c3c;font-size:14px;">代码编辑器加载失败，请检查网络后重试</div>';
+    };
+    document.body.appendChild(script);
 };
 
 const saveMonacoData = () => {
@@ -397,6 +417,12 @@ const toggleSkeleton = (show) => {
 
 const loadBackground = async (url) => {
     if (!url) return;
+    
+    // 用 CSS background-image 直接加载（不阻塞浏览器 load 事件）
+    // 浏览器原生管理图片加载，即使图片慢也不会让标签页一直转圈
+    document.body.style.backgroundImage = `url('${url}')`;
+    
+    // 后台尝试缓存到 Cache API，不影响页面加载
     try {
         const bgCacheName = 'nav-bg-cache-v1';
         const cache = await caches.open(bgCacheName);
@@ -404,20 +430,18 @@ const loadBackground = async (url) => {
         if (cachedResponse) {
             const blob = await cachedResponse.blob();
             document.body.style.backgroundImage = `url('${URL.createObjectURL(blob)}')`;
+            return;
         }
+        // 后台 fetch 更新缓存（不 await，完全异步）
         fetch(url, { mode: 'cors' }).then(async response => {
             if (response.ok) {
                 await cache.put(url, response.clone());
-                if (!cachedResponse) {
-                    const blob = await response.blob();
-                    document.body.style.backgroundImage = `url('${URL.createObjectURL(blob)}')`;
-                }
+                const blob = await response.blob();
+                document.body.style.backgroundImage = `url('${URL.createObjectURL(blob)}')`;
             }
         }).catch(() => { });
     } catch (e) {
-        const img = new Image();
-        img.src = url;
-        img.onload = () => { document.body.style.backgroundImage = `url('${url}')`; };
+        // Cache API 不可用时忽略，CSS background 已直接设置
     }
 };
 
@@ -463,10 +487,15 @@ const init = async (forceRender = false) => {
     }
 
     try {
+        // 添加 8 秒超时保护，防止 API 冷启动慢时页面挂起
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
         const res = await fetch(fetchUrl, {
             headers: sysToken ? { 'Authorization': sysToken } : {},
-            cache: 'no-store'
+            cache: 'no-store',
+            signal: controller.signal
         });
+        clearTimeout(timeoutId);
 
         if (!res.ok) {
             if (res.status === 401) {
@@ -502,13 +531,24 @@ const init = async (forceRender = false) => {
         }
 
     } catch (e) {
-        console.error("后台数据更新失败", e);
-        if (!localCache) {
-            gridContainer.innerHTML = `<div style="margin:50px auto; padding:20px; background:rgba(255,0,0,0.2); border:1px solid red; border-radius:10px; text-align:left;">
-                <h3 style="color:#ff6b6b; margin-bottom:10px;">⚠️ 数据加载失败</h3>
-                <p>${utils.escapeHTML(e.message)}</p>
-            </div>`;
-            toggleSkeleton(false);
+        if (e.name === 'AbortError') {
+            console.error("API 请求超时", e);
+            if (!localCache) {
+                gridContainer.innerHTML = `<div style="margin:50px auto; padding:20px; background:rgba(255,165,0,0.2); border:1px solid orange; border-radius:10px; text-align:left;">
+                    <h3 style="color:#f39c12; margin-bottom:10px;">⏱️ 数据加载超时</h3>
+                    <p>服务器响应超时，已显示本地缓存数据（如有）</p>
+                </div>`;
+                toggleSkeleton(false);
+            }
+        } else {
+            console.error("后台数据更新失败", e);
+            if (!localCache) {
+                gridContainer.innerHTML = `<div style="margin:50px auto; padding:20px; background:rgba(255,0,0,0.2); border:1px solid red; border-radius:10px; text-align:left;">
+                    <h3 style="color:#ff6b6b; margin-bottom:10px;">⚠️ 数据加载失败</h3>
+                    <p>${utils.escapeHTML(e.message)}</p>
+                </div>`;
+                toggleSkeleton(false);
+            }
         }
     }
 };

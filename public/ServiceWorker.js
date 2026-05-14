@@ -57,17 +57,18 @@ self.addEventListener('fetch', event => {
   // API 请求不走 SW 缓存
   if (event.request.url.includes('/api/')) return;
 
-  // 1. 对于 HTML 页面请求，采用 Network First (网络优先)
+  // 1. 对于 HTML 页面请求，优先使用缓存，后台更新（Stale-While-Revalidate）
+  //    避免每次导航都等待网络，提升首屏加载速度
   if (event.request.mode === 'navigate' || event.request.headers.get('accept').includes('text/html')) {
     event.respondWith(
-      fetch(event.request).then(networkResponse => {
-        return caches.open(CACHE_NAME).then(cache => {
-          cache.put(event.request, networkResponse.clone());
+      caches.match(event.request).then(cachedResponse => {
+        const fetchPromise = fetch(event.request).then(networkResponse => {
+          if (networkResponse.ok) {
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, networkResponse.clone()));
+          }
           return networkResponse;
-        });
-      }).catch(() => {
-        // 断网时降级到缓存
-        return caches.match(event.request);
+        }).catch(() => {});
+        return cachedResponse || fetchPromise;
       })
     );
     return;
