@@ -561,7 +561,7 @@ body::before {
 .card:hover {
     background: var(--glass-hover);
     transform: translateY(-2px);
-    z-index: 5;
+    z-index: 100;
 }
 
 /* ==================== 卡片悬停彩色光晕效果 ==================== */
@@ -876,6 +876,11 @@ body.view-style-2 .card.has-bg[data-color-ready]:hover {
     opacity: 1;
     visibility: visible;
     transform: translateX(-50%) translateY(0);
+}
+
+/* 悬停时确保 tooltip 不被父容器裁剪 */
+.card[data-tooltip]:hover {
+    overflow: visible;
 }
 
 /* ==================== 卡片图标与标题（Style 0） ==================== */
@@ -1438,6 +1443,13 @@ body.view-style-2 .card {
     transition: all 0.25s ease;
     min-height: var(--card-h-colorful, 85px);
     height: var(--card-h-colorful, 85px);
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+body.view-style-2 .card:hover {
+    z-index: 100;
 }
 
 body.view-style-2 .card.has-bg {
@@ -1475,6 +1487,7 @@ body.view-style-2 .card a {
     justify-content: flex-start;
     padding: 0 4px;
     gap: 10px;
+    box-sizing: border-box;
 }
 
 body.view-style-2 .icon-wrapper {
@@ -1508,7 +1521,7 @@ body.view-style-2 .card-text-block {
     align-items: center;
     gap: 0;
     min-width: 0;
-    flex: 1;
+    flex: 1 1 0%;
     overflow: hidden;
 }
 
@@ -1519,14 +1532,14 @@ body.view-style-2 .card h3 {
     margin-left: 0;
     width: 100%;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
     display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
     color: #fff;
-    line-height: 1.2;
+    line-height: 1.3;
     min-height: unset;
+    word-break: break-all;
 }
 
 body.view-style-2 .card[data-tooltip]::after {

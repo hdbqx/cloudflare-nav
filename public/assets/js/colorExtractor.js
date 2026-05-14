@@ -35,8 +35,13 @@
     return new Promise(function (resolve) {
       var img = new Image();
       img.crossOrigin = 'anonymous';
+      var timeoutId = setTimeout(function () {
+        img.src = '';
+        resolve(null);
+      }, 8000);
 
       img.onload = function () {
+        clearTimeout(timeoutId);
         var canvas = document.createElement('canvas');
         var ctx = canvas.getContext('2d');
 
@@ -52,13 +57,20 @@
 
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-        var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        var imageData;
+        try {
+          imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        } catch (e) {
+          // CORS 限制导致 canvas 被污染
+          resolve(null);
+          return;
+        }
         var data = imageData.data;
 
-        // 分析颜色分布
-        var colorMap = {};
+        // 分析颜色分布（16px 量化粒度 + 鲜艳色加权）
+        var colorBuckets = {};
         var maxCount = 0;
-        var dominantColor = '';
+        var dominantKey = '';
 
         for (var i = 0; i < data.length; i += 4) {
           var r = data[i];
@@ -69,34 +81,47 @@
           // 跳过透明像素
           if (a < 128) continue;
 
-          // 跳过白色/灰色像素（通常是背景）
+          // 跳过近白/近灰像素（通常是背景）
           var brightness = (r + g + b) / 3;
-          var isGrayish = Math.abs(r - g) < 30 && Math.abs(g - b) < 30 && Math.abs(r - b) < 30;
+          var maxDiff = Math.max(Math.abs(r - g), Math.abs(g - b), Math.abs(r - b));
+          if (brightness > 235 || (brightness > 200 && maxDiff < 20)) continue;
 
-          if (brightness > 240 || isGrayish) continue;
-
-          // 颜色量化
-          var qR = Math.round(r / 20) * 20;
-          var qG = Math.round(g / 20) * 20;
-          var qB = Math.round(b / 20) * 20;
+          // 颜色量化（16px 粒度）
+          var qR = Math.round(r / 16) * 16;
+          var qG = Math.round(g / 16) * 16;
+          var qB = Math.round(b / 16) * 16;
           var key = qR + ',' + qG + ',' + qB;
 
-          colorMap[key] = (colorMap[key] || 0) + 1;
-          if (colorMap[key] > maxCount) {
-            maxCount = colorMap[key];
-            dominantColor = key;
+          // 鲜艳色加权
+          var weight = maxDiff > 60 ? 1.5 : 1;
+          colorBuckets[key] = (colorBuckets[key] || 0) + weight;
+          if (colorBuckets[key] > maxCount) {
+            maxCount = colorBuckets[key];
+            dominantKey = key;
           }
         }
 
         var result;
-        if (dominantColor) {
-          var parts = dominantColor.split(',').map(Number);
+        if (dominantKey) {
+          var parts = dominantKey.split(',').map(Number);
           result = {
             hex: rgbToHex(parts[0], parts[1], parts[2]),
             rgb: parts[0] + ', ' + parts[1] + ', ' + parts[2]
           };
         } else {
-          result = DEFAULT_COLOR;
+          // 无有效色：取图片中央像素的颜色
+          var cx = Math.floor(canvas.width / 2);
+          var cy = Math.floor(canvas.height / 2);
+          var centerIdx = (cy * canvas.width + cx) * 4;
+          if (centerIdx >= 0 && centerIdx + 2 < data.length) {
+            result = {
+              hex: rgbToHex(data[centerIdx], data[centerIdx + 1], data[centerIdx + 2]),
+              rgb: data[centerIdx] + ', ' + data[centerIdx + 1] + ', ' + data[centerIdx + 2]
+            };
+          } else {
+            resolve(null);
+            return;
+          }
         }
 
         colorCache.set(imgUrl, result);
@@ -104,7 +129,8 @@
       };
 
       img.onerror = function () {
-        reject(new Error('image load failed'));
+        clearTimeout(timeoutId);
+        resolve(null);
       };
 
       img.src = imgUrl;

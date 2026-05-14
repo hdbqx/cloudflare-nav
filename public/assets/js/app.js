@@ -545,10 +545,79 @@ const renderTools = () => {
     }
 };
 
+// ==================== 图标多源降级工具 ====================
+/**
+ * 从URL提取域名
+ */
+const extractDomain = function (url) {
+    try { return new URL(url).hostname; } catch (e) { return null; }
+};
+
+/**
+ * 获取备用图标 URL（在不同 favicon 服务间切换）
+ */
+const getAltFaviconUrl = function (currentSrc, itemUrl) {
+    var domain = extractDomain(itemUrl);
+    if (!domain) return null;
+    if (currentSrc && currentSrc.indexOf('favicon.im') !== -1) {
+        return 'https://icons.duckduckgo.com/ip3/' + domain + '.ico';
+    }
+    return 'https://favicon.im/' + domain;
+};
+
+/**
+ * 图标加载失败时的智能降级处理（全局挂载）
+ * 先尝试备用图标源，都失败后才回退到 emoji
+ */
+window.handleIconError = function (img) {
+    if (img.dataset.fallbackTried) {
+        img.outerHTML = '<span class="emoji-icon">' + window.utils.getRandomEmoji() + '</span>';
+        return;
+    }
+    img.dataset.fallbackTried = '1';
+    var card = img.closest('.card');
+    if (card) {
+        var itemId = card.getAttribute('data-id');
+        var item = appData.items.find(function (i) { return i.id === itemId; });
+        if (item && item.url) {
+            var altSrc = getAltFaviconUrl(img.src, item.url);
+            if (altSrc) {
+                img.src = altSrc;
+                return;
+            }
+        }
+    }
+    img.outerHTML = '<span class="emoji-icon">' + window.utils.getRandomEmoji() + '</span>';
+};
+
+/**
+ * glow-bg 图片的降级处理（静默隐藏，避免控制台报错）
+ */
+window.handleGlowIconError = function (img) {
+    if (img.dataset.fallbackTried) {
+        img.style.display = 'none';
+        return;
+    }
+    img.dataset.fallbackTried = '1';
+    var card = img.closest('.card');
+    if (card) {
+        var itemId = card.getAttribute('data-id');
+        var item = appData.items.find(function (i) { return i.id === itemId; });
+        if (item && item.url) {
+            var altSrc = getAltFaviconUrl(img.src, item.url);
+            if (altSrc) {
+                img.src = altSrc;
+                return;
+            }
+        }
+    }
+    img.style.display = 'none';
+};
+
 // ==================== 卡片 HTML 生成 ====================
 const buildCardInnerHTML = (item, adminHtml, style) => {
 
-    let fallbackAttr = `onerror="this.outerHTML='<span class=\'emoji-icon\'>'+window.utils.getRandomEmoji()+'</span>';"`;
+    var fallbackAttr = 'onerror="window.handleIconError(this)"';
 
     const safeIcon = utils.escapeHTML(item.icon);
 
@@ -569,10 +638,11 @@ const buildCardInnerHTML = (item, adminHtml, style) => {
 
 
     // 光晕背景层：用图标图片或 emoji 作为模糊扩散光源
+    var glowFallback = 'onerror="window.handleGlowIconError(this)"';
 
     const glowBgHtml = isImgIcon
 
-        ? `<div class="card-glow-bg"><img src="${safeIcon}" loading="lazy" aria-hidden="true"></div>`
+        ? `<div class="card-glow-bg"><img src="${safeIcon}" loading="lazy" aria-hidden="true" ${glowFallback}></div>`
 
         : `<div class="card-glow-bg"><div class="glow-emoji">${safeIcon || '\u{1F517}'}</div></div>`;
 
@@ -1037,15 +1107,37 @@ const initCardGlow = (container) => {
         const isImgIcon = iconSrc && iconSrc.startsWith('http');
         const title = item.title || '';
 
-        if (isImgIcon) {
-            extractor.extractColorFromImage(iconSrc)
+        /**
+         * 尝试从图片提取颜色，失败时尝试备用源或降级到文本色
+         */
+        const tryExtractColor = (src, fallbackToText) => {
+            extractor.extractColorFromImage(src)
                 .then(color => {
                     if (color) {
                         card.style.setProperty('--icon-color', color.hex);
                         card.style.setProperty('--icon-color-rgb', color.rgb);
                         card.setAttribute('data-color-ready', '');
-                    } else {
-                        // 提取失败：降级为文本颜色
+                    } else if (fallbackToText) {
+                        // 颜色提取无结果，尝试备用图标源
+                        const altSrc = item.url ? getAltFaviconUrl(src, item.url) : null;
+                        if (altSrc && altSrc !== src) {
+                            tryExtractColor(altSrc, true);
+                        } else {
+                            const fc = extractor.generateColorFromText(title);
+                            if (fc) {
+                                card.style.setProperty('--icon-color', fc.hex);
+                                card.style.setProperty('--icon-color-rgb', fc.rgb);
+                                card.setAttribute('data-color-ready', '');
+                            }
+                        }
+                    }
+                })
+                .catch(() => {
+                    // CORS 或其他错误：尝试备用图标源
+                    const altSrc = item.url ? getAltFaviconUrl(src, item.url) : null;
+                    if (altSrc && altSrc !== src) {
+                        tryExtractColor(altSrc, true);
+                    } else if (fallbackToText) {
                         const fc = extractor.generateColorFromText(title);
                         if (fc) {
                             card.style.setProperty('--icon-color', fc.hex);
@@ -1053,16 +1145,23 @@ const initCardGlow = (container) => {
                             card.setAttribute('data-color-ready', '');
                         }
                     }
-                })
-                .catch(err => {
-                    // CORS 或其他错误：降级为文本颜色
-                    const fc = extractor.generateColorFromText(title);
-                    if (fc) {
-                        card.style.setProperty('--icon-color', fc.hex);
-                        card.style.setProperty('--icon-color-rgb', fc.rgb);
-                        card.setAttribute('data-color-ready', '');
-                    }
                 });
+        };
+
+        /**
+         * 最终兜底：使用文本生成颜色
+         */
+        const fallbackToTextColor = () => {
+            const fc = extractor.generateColorFromText(title);
+            if (fc) {
+                card.style.setProperty('--icon-color', fc.hex);
+                card.style.setProperty('--icon-color-rgb', fc.rgb);
+                card.setAttribute('data-color-ready', '');
+            }
+        };
+
+        if (isImgIcon) {
+            tryExtractColor(iconSrc, true);
         } else {
             // Emoji 或无图标：从文本生成颜色
             const color = extractor.generateColorFromText(iconSrc || title);
