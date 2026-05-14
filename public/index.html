@@ -5,15 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>个人网站导航</title>
     
-    <!-- DNS 预解析与预连接（优化图标加载速度） -->
-    <link rel="dns-prefetch" href="https://favicon.im">
-    <link rel="preconnect" href="https://favicon.im" crossorigin>
-    <link rel="dns-prefetch" href="https://icons.duckduckgo.com">
-    <link rel="preconnect" href="https://icons.duckduckgo.com" crossorigin>
+    <!-- DNS 预解析与预连接 -->
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     
-    <!-- 预加载外部资源 -->
-    <link rel="preload" href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" as="style">
-    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <!-- RemixIcon 图标字体（异步加载，不阻塞 load 事件）
+         先用 media="print" 让浏览器异步下载，下载完成后切换为 screen -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css"></noscript>
     
     <!-- Favicon（内联 SVG，零网络请求） -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌐</text></svg>">

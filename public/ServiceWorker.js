@@ -6,7 +6,7 @@
  */
 
 // 缓存版本号（更新时需修改）
-const CACHE_NAME = 'nav-cache-v6';
+const CACHE_NAME = 'nav-cache-v7';
 
 // 需要缓存的核心静态资源
 const URLS_TO_CACHE = [
@@ -15,6 +15,7 @@ const URLS_TO_CACHE = [
   '/manifest.json',
   '/assets/css/style.css',
   '/assets/js/utils.js',
+  '/assets/js/colorExtractor.js',
   '/assets/js/app.js',
   'https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css',
   'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js'
@@ -23,12 +24,19 @@ const URLS_TO_CACHE = [
 /**
  * 安装事件
  * @description 缓存核心静态资源，跳过等待直接激活
+ *               单个资源失败不影响其他资源的缓存
  */
 self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(URLS_TO_CACHE))
+    caches.open(CACHE_NAME).then(cache => {
+      // 逐个缓存，单个失败不影响整体（比 cache.addAll 更健壮）
+      return Promise.allSettled(
+        URLS_TO_CACHE.map(url =>
+          cache.add(url).catch(err => console.warn('SW 缓存失败:', url, err.message))
+        )
+      );
+    })
   );
 });
 
@@ -59,7 +67,8 @@ self.addEventListener('fetch', event => {
 
   // 1. 对于 HTML 页面请求，优先使用缓存，后台更新（Stale-While-Revalidate）
   //    避免每次导航都等待网络，提升首屏加载速度
-  if (event.request.mode === 'navigate' || event.request.headers.get('accept').includes('text/html')) {
+  const acceptHeader = event.request.headers.get('accept') || '';
+  if (event.request.mode === 'navigate' || acceptHeader.includes('text/html')) {
     event.respondWith(
       caches.match(event.request).then(cachedResponse => {
         const fetchPromise = fetch(event.request).then(networkResponse => {
