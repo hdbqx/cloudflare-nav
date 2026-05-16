@@ -357,6 +357,36 @@ body::before {
     text-overflow: ellipsis;
 }
 
+.sidebar-nav-item .nav-count {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 600;
+    min-width: 18px;
+    height: 18px;
+    line-height: 18px;
+    text-align: center;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--text-dim);
+    padding: 0 5px;
+    flex-shrink: 0;
+}
+
+.sidebar-nav-item.active .nav-count {
+    background: rgba(255, 255, 255, 0.25);
+    color: white;
+}
+
+body.light-theme .sidebar-nav-item .nav-count {
+    background: rgba(0, 0, 0, 0.07);
+    color: #888;
+}
+
+body.light-theme .sidebar-nav-item.active .nav-count {
+    background: rgba(255, 255, 255, 0.35);
+    color: white;
+}
+
 .sidebar-nav-item:hover:not(.active) {
     background: rgba(255, 255, 255, 0.08);
 }
@@ -954,7 +984,7 @@ body.view-style-2 .card.has-bg[data-color-ready]:hover {
     display: flex;
     gap: 2px;
     padding: 3px;
-    margin-bottom: 6px;
+    margin-top: 4px;
     background: rgba(255, 255, 255, 0.06);
     border-radius: 25px;
     border: 1px solid var(--glass-border);
@@ -972,7 +1002,7 @@ body.view-style-2 .card.has-bg[data-color-ready]:hover {
     border: 1px solid transparent;
     color: var(--text-dim);
     cursor: pointer;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 500;
     transition: all 0.2s ease;
     white-space: nowrap;

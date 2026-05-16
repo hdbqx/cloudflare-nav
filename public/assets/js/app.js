@@ -34,11 +34,11 @@ const bilibiliCoverCache = new Map();
 const fetchBilibiliCover = async (bvid) => {
     if (bilibiliCoverCache.has(bvid)) return bilibiliCoverCache.get(bvid);
     try {
-        const res = await fetch(`https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`);
+        const res = await fetch(`/api/bilibili-cover?bvid=${bvid}`);
         const data = await res.json();
-        if (data.code === 0 && data.data && data.data.pic) {
-            bilibiliCoverCache.set(bvid, data.data.pic);
-            return data.data.pic;
+        if (data.coverUrl) {
+            bilibiliCoverCache.set(bvid, data.coverUrl);
+            return data.coverUrl;
         }
     } catch (e) {
         console.warn('Bilibili 封面获取失败:', bvid, e);
@@ -806,10 +806,18 @@ const renderNav = () => {
 
     // 渲染侧边栏导航项
     cats.forEach((cat) => {
+        // 计算该分类下的可见项目数量
+        let catCount = 0;
+        if (cat.id === 'VIRTUAL_FREQ') {
+            const allAvailableItems = appData.items.filter(i => isAdmin || !i.hidden);
+            catCount = allAvailableItems.filter(i => clickData[i.id] > 0).slice(0, 12).length;
+        } else {
+            catCount = appData.items.filter(i => i.catId === cat.id && (isAdmin || !i.hidden)).length;
+        }
         const item = document.createElement('div');
         item.className = 'sidebar-nav-item' + (activeCatId === cat.id ? ' active' : '') + (cat.hidden ? ' hidden-item' : '');
         item.setAttribute('data-cat-id', cat.id);
-        item.innerHTML = `<span class="nav-icon">${utils.escapeHTML(cat.icon)}</span><span class="nav-label">${utils.escapeHTML(cat.name)}</span>`;
+        item.innerHTML = `<span class="nav-icon">${utils.escapeHTML(cat.icon)}</span><span class="nav-label">${utils.escapeHTML(cat.name)}</span><span class="nav-count">${catCount}</span>`;
         item.addEventListener('click', () => {
             activeCatId = cat.id;
             renderNav();

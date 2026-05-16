@@ -168,6 +168,52 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // ====== Bilibili 封面代理（解决 CORS） ======
+  if (pathname === '/api/bilibili-cover') {
+    const bvid = url.searchParams.get('bvid');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Content-Type', 'application/json;charset=UTF-8');
+
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
+    if (req.method !== 'GET') {
+      res.writeHead(405);
+      res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+      return;
+    }
+
+    if (!bvid || !/^BV[a-zA-Z0-9]+$/.test(bvid)) {
+      res.writeHead(400);
+      res.end(JSON.stringify({ error: 'Invalid bvid parameter' }));
+      return;
+    }
+
+    // 本地测试：无需缓存
+    fetch(`https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://www.bilibili.com/',
+      }
+    })
+    .then(biliRes => biliRes.json())
+    .then(biliData => {
+      const coverUrl = biliData?.data?.pic || null;
+      res.writeHead(200);
+      res.end(JSON.stringify({ code: biliData.code, bvid, coverUrl }));
+    })
+    .catch(err => {
+      res.writeHead(500);
+      res.end(JSON.stringify({ error: err.message }));
+    });
+    return;
+  }
+
   // ====== 静态文件服务 ======
   let filePath = path.join(PUBLIC_DIR, pathname === '/' ? 'index.html' : pathname);
   const ext = path.extname(filePath).toLowerCase();
