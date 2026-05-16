@@ -608,6 +608,7 @@ const getAltFaviconUrl = function (currentSrc, itemUrl) {
 /**
  * 图标加载失败时的智能降级处理（全局挂载）
  * 先尝试备用图标源，都失败后才回退到 emoji
+ * 备用源使用 off-DOM Image 预加载验证，避免 404 URL 产生控制台报错
  */
 window.handleIconError = function (img) {
     if (img.dataset.fallbackTried) {
@@ -622,7 +623,16 @@ window.handleIconError = function (img) {
         if (item && item.url) {
             var altSrc = getAltFaviconUrl(img.src, item.url);
             if (altSrc) {
-                img.src = altSrc;
+                // 创建 off-DOM Image 对象预加载备用源
+                // 不在 DOM 中的 Image 加载失败不会触发控制台 404 报错
+                var preloader = new Image();
+                preloader.onload = function () {
+                    img.src = altSrc;
+                };
+                preloader.onerror = function () {
+                    img.outerHTML = '<span class="emoji-icon">' + window.utils.getRandomEmoji() + '</span>';
+                };
+                preloader.src = altSrc;
                 return;
             }
         }
@@ -632,6 +642,7 @@ window.handleIconError = function (img) {
 
 /**
  * glow-bg 图片的降级处理（静默隐藏，避免控制台报错）
+ * 备用源使用 off-DOM Image 预加载验证，避免 404 URL 产生控制台报错
  */
 window.handleGlowIconError = function (img) {
     if (img.dataset.fallbackTried) {
@@ -646,7 +657,14 @@ window.handleGlowIconError = function (img) {
         if (item && item.url) {
             var altSrc = getAltFaviconUrl(img.src, item.url);
             if (altSrc) {
-                img.src = altSrc;
+                var preloader = new Image();
+                preloader.onload = function () {
+                    img.src = altSrc;
+                };
+                preloader.onerror = function () {
+                    img.style.display = 'none';
+                };
+                preloader.src = altSrc;
                 return;
             }
         }
