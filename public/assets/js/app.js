@@ -390,6 +390,13 @@ const updateGridWidth = () => {
     const hColorful = (appData.settings && appData.settings.cardHeightColorful) ? appData.settings.cardHeightColorful : 85;
     document.documentElement.style.setProperty('--card-h-default', hDefault + 'px');
     document.documentElement.style.setProperty('--card-h-colorful', hColorful + 'px');
+    // 默认样式与缤纷样式各自独立的图标尺寸
+    const iconSizeDefault = (appData.settings && appData.settings.iconSizeDefault) ? appData.settings.iconSizeDefault : 32;
+    const iconSizeColorful = (appData.settings && appData.settings.iconSizeColorful) ? appData.settings.iconSizeColorful : 32;
+    document.documentElement.style.setProperty('--icon-size-default', iconSizeDefault + 'px');
+    document.documentElement.style.setProperty('--icon-size-colorful', iconSizeColorful + 'px');
+    document.documentElement.style.setProperty('--emoji-size-default', iconSizeDefault + 'px');
+    document.documentElement.style.setProperty('--emoji-size-colorful', iconSizeColorful + 'px');
 };
 
 const showLoader = (text = '正在处理中...') => {
@@ -1610,6 +1617,8 @@ const manageCats = () => {
 
     const currentDefaultHeight = (appData.settings && appData.settings.cardHeightDefault) ? appData.settings.cardHeightDefault : 85;
     const currentColorfulHeight = (appData.settings && appData.settings.cardHeightColorful) ? appData.settings.cardHeightColorful : 85;
+    const currentIconSizeDefault = (appData.settings && appData.settings.iconSizeDefault) ? appData.settings.iconSizeDefault : 32;
+    const currentIconSizeColorful = (appData.settings && appData.settings.iconSizeColorful) ? appData.settings.iconSizeColorful : 32;
 
     document.getElementById('edit-form-body').innerHTML = `
         <div class="form-row" style="margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
@@ -1621,8 +1630,14 @@ const manageCats = () => {
         <div class="form-row" style="margin-bottom: 10px;">
             <label>默认高度</label><input type="number" id="setting-height-default" value="${currentDefaultHeight}"><span style="color:#666; margin-left:10px;">px</span>
         </div>
+        <div class="form-row" style="margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
+            <label>默认图标</label><input type="number" id="setting-icon-size-default" value="${currentIconSizeDefault}" min="16" max="128"><span style="color:#666; margin-left:10px;">px</span>
+        </div>
         <div class="form-row" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 10px;">
             <label>缤纷高度</label><input type="number" id="setting-height-colorful" value="${currentColorfulHeight}"><span style="color:#666; margin-left:10px;">px</span>
+        </div>
+        <div class="form-row" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 10px;">
+            <label>缤纷图标</label><input type="number" id="setting-icon-size-colorful" value="${currentIconSizeColorful}" min="16" max="128"><span style="color:#666; margin-left:10px;">px</span>
         </div>
         <div class="form-row" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 10px;">
             <label>自定义背景</label>
@@ -1667,6 +1682,16 @@ const manageCats = () => {
     document.getElementById('setting-height-colorful').addEventListener('input', (e) => {
         if (!appData.settings) appData.settings = {};
         appData.settings.cardHeightColorful = parseInt(e.target.value) || 85;
+        updateGridWidth();
+    });
+    document.getElementById('setting-icon-size-default').addEventListener('input', (e) => {
+        if (!appData.settings) appData.settings = {};
+        appData.settings.iconSizeDefault = parseInt(e.target.value) || 32;
+        updateGridWidth();
+    });
+    document.getElementById('setting-icon-size-colorful').addEventListener('input', (e) => {
+        if (!appData.settings) appData.settings = {};
+        appData.settings.iconSizeColorful = parseInt(e.target.value) || 32;
         updateGridWidth();
     });
     document.getElementById('setting-theme').addEventListener('change', (e) => {

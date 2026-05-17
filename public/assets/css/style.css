@@ -31,9 +31,11 @@
     /* 背景遮罩透明度 */
     --bg-overlay-opacity: 0.4;
 
-    /* 网站卡片图标尺寸 */
-    --icon-size: 32px;
-    --emoji-size: 32px;
+    /* 网站卡片图标尺寸（按样式独立） */
+    --icon-size-default: 32px;
+    --icon-size-colorful: 32px;
+    --emoji-size-default: 32px;
+    --emoji-size-colorful: 32px;
 
     /* 侧边栏尺寸 */
     --sidebar-width: 250px;
@@ -928,14 +930,14 @@ body.view-style-2 .card.has-bg[data-color-ready]:hover {
 }
 
 .card img {
-    width: var(--icon-size);
-    height: var(--icon-size);
+    width: var(--icon-size-default, 32px);
+    height: var(--icon-size-default, 32px);
     border-radius: 4px;
     object-fit: contain;
 }
 
 .card .emoji-icon {
-    font-size: var(--emoji-size);
+    font-size: var(--emoji-size-default, 32px);
 }
 
 .card h3 {
@@ -1521,9 +1523,9 @@ body.view-style-2 .card a {
 }
 
 body.view-style-2 .icon-wrapper {
-    width: calc(var(--icon-size) + 10px);
-    height: calc(var(--icon-size) + 10px);
-    min-width: calc(var(--icon-size) + 10px);
+    width: calc(var(--icon-size-colorful, 32px) + 10px);
+    height: calc(var(--icon-size-colorful, 32px) + 10px);
+    min-width: calc(var(--icon-size-colorful, 32px) + 10px);
     border-radius: 8px;
     background: transparent;
     display: flex;
@@ -1535,14 +1537,14 @@ body.view-style-2 .icon-wrapper {
 }
 
 body.view-style-2 .card img {
-    width: var(--icon-size);
-    height: var(--icon-size);
+    width: var(--icon-size-colorful, 32px);
+    height: var(--icon-size-colorful, 32px);
     border-radius: 5px;
     object-fit: contain;
 }
 
 body.view-style-2 .card .emoji-icon {
-    font-size: calc(var(--emoji-size) + 4px);
+    font-size: calc(var(--emoji-size-colorful, 32px) + 4px);
 }
 
 body.view-style-2 .card-text-block {
@@ -1974,8 +1976,6 @@ body.view-style-2 .card[data-tooltip]::before {
     :root {
         --card-w: 80px;
         --card-h: 80px;
-        --card-h-default: 80px;
-        --card-h-colorful: 80px;
     }
 
     .video-grid {
@@ -1987,8 +1987,6 @@ body.view-style-2 .card[data-tooltip]::before {
     :root {
         --card-w: 75px;
         --card-h: 75px;
-        --card-h-default: 75px;
-        --card-h-colorful: 75px;
         --sidebar-width: 250px;
     }
 
@@ -2037,8 +2035,6 @@ body.view-style-2 .card[data-tooltip]::before {
     :root {
         --card-w: 70px;
         --card-h: 70px;
-        --card-h-default: 70px;
-        --card-h-colorful: 70px;
     }
 
     .main-content {
