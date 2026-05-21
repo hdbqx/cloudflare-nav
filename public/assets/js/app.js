@@ -1,7 +1,7 @@
 ﻿/**
  * ==========================================
- * app.js - 核心前端逻辑（增量合并与隐藏编辑模式升级版）
- * CloudNav 个人导航页主程序
+ * app.js - 核心前端逻辑（全功能无损整合版）
+ * 包含：Edge 增量导入、独立编辑面板、智能图标获取与偏好控制
  * ==========================================
  */
 
@@ -10,7 +10,7 @@ let appData = { settings: { siteName: '个人导航', siteIcon: '🌐', cardHeig
 let activeCatId = '';
 let sysToken = localStorage.getItem('nav_token') || '';
 let isAdmin = false;
-let isEditMode = false; // 新增：控制管理员是否开启显式编辑面板
+let isEditMode = false; // 控制管理员是否开启显式编辑面板
 let editingType = 'items';
 let editingId = null;
 let toastTimer = null;
@@ -27,7 +27,7 @@ const bilibiliCoverCache = new Map();
 const fetchBilibiliCover = async (bvid) => {
     if (bilibiliCoverCache.has(bvid)) return bilibiliCoverCache.get(bvid);
     try {
-        const res = await fetch(`/api/bilibili-cover?bvid=${bvid}`);
+        const res = await fetch(`/api/bilibili-cover?bvid=${bvid}&_t=${Date.now()}`);
         const data = await res.json();
         if (data.coverUrl) {
             bilibiliCoverCache.set(bvid, data.coverUrl);
@@ -106,7 +106,18 @@ const hashPassword = async (password) => {
 document.addEventListener('DOMContentLoaded', () => {
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/ServiceWorker.js').catch(err => console.log('SW 注册失败:', err));
+            navigator.serviceWorker.register('/ServiceWorker.js')
+                .then(reg => {
+                    reg.addEventListener('updatefound', () => {
+                        const newWorker = reg.installing;
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                showToast("发现静态视图有更新，请手动刷新页面应用", "#3498db");
+                            }
+                        });
+                    });
+                })
+                .catch(err => console.log('SW 注册失败:', err));
         });
     }
 
@@ -356,7 +367,7 @@ const applyBackgroundConfig = () => {
 };
 
 const init = async (forceRender = false) => {
-    let fetchUrl = '/api/config';
+    let fetchUrl = `/api/config?_t=${Date.now()}`;
     const gridContainer = document.getElementById('grid-container');
     const localCache = localStorage.getItem('nav_app_data');
     let initialIsAdmin = isAdmin;
@@ -440,7 +451,7 @@ const renderTools = () => {
 
     if (isAdmin) {
         document.title = "管理后台";
-        // 核心改动：注入编辑模式显隐控制开关
+        // 显式编辑面板控制开关
         createSidebarBtn(isEditMode ? 'ri-lock-unlock-line' : 'ri-lock-line', isEditMode ? '关闭编辑面板' : '开启编辑面板', () => {
             isEditMode = !isEditMode;
             renderTools();
@@ -615,7 +626,6 @@ const renderNav = () => {
             videoGrid.className = 'video-grid';
             catItems.forEach(item => { videoGrid.appendChild(buildVideoCard(item, detectVideoPlatform(item.url))); });
 
-            // 核心UI：只有开启编辑面板时，才会渲染“+ 新增”卡片
             if (isAdmin && isEditMode && cat.id !== 'VIRTUAL_FREQ') {
                 const addCard = document.createElement('div');
                 addCard.className = 'video-card'; addCard.style.cssText = 'border-style:dashed;display:flex;align-items:center;justify-content:center;min-height:120px;';
@@ -648,7 +658,6 @@ const renderNav = () => {
                 if (currentViewStyle === 2 && item.bgColor) { card.style.setProperty('--card-bg-color', item.bgColor); card.classList.add('has-bg'); }
                 card.setAttribute('data-tooltip', item.desc ? `${item.title}\n${item.desc}` : item.title);
 
-                // 核心UI：操作按钮栏与 isEditMode 深度绑定锁死
                 let adminHtml = '';
                 if (isAdmin && isEditMode && cat.id !== 'VIRTUAL_FREQ') {
                     adminHtml = `<div class="admin-actions">
@@ -670,7 +679,6 @@ const renderNav = () => {
                 fragment.appendChild(card);
             });
 
-            // 核心UI：普通网格中的“+ 新增”也受编辑面板开关驱动
             if (isAdmin && isEditMode && cat.id !== 'VIRTUAL_FREQ') {
                 const addCard = document.createElement('div');
                 addCard.className = 'card card-add-new'; addCard.style.borderStyle = 'dashed';
@@ -694,7 +702,6 @@ const buildVideoCard = (item, videoInfo) => {
     let badgeHtml = videoInfo ? `<div class="video-card-badge ${videoInfo.type === 'bilibili'?'bilibili':'youtube'}">${videoInfo.type === 'bilibili'?'Bilibili':'YouTube'}</div>` : '';
     let coverHtml = videoInfo?.type === 'bilibili' ? `<div class="video-cover-slot" data-bvid="${videoInfo.bvid}"><div class="video-card-cover-fallback"><i class="ri-play-circle-line"></i></div></div>` : (videoInfo?.type === 'youtube' ? `<img src="https://img.youtube.com/vi/${videoInfo.videoId}/mqdefault.jpg" loading="lazy">` : `<div class="video-card-cover-fallback"><i class="ri-play-circle-line"></i></div>`);
 
-    // 核心UI：视频小组件内部图标也跟编辑模式联动
     let adminHtml = '';
     if (isAdmin && isEditMode) {
         adminHtml = `<div class="admin-actions">
@@ -720,17 +727,28 @@ const initCardGlow = (container) => {
     const extractor = window.colorExtractor;
     if (!extractor) return;
 
+    let queue = [];
+    let activeCount = 0;
+    const MAX_CONCURRENT = 6;
+
+    const processQueue = () => {
+        if (activeCount >= MAX_CONCURRENT || queue.length === 0) return;
+        activeCount++;
+        let task = queue.shift();
+        task().finally(() => { activeCount--; processQueue(); });
+    };
+
     cards.forEach(card => {
         let item = appData.items.find(i => i.id === card.getAttribute('data-id'));
         if (!item) return;
         if (item.icon && item.icon.startsWith('http')) {
-            extractor.extractColorFromImage(item.icon).then(color => {
+            queue.push(() => extractor.extractColorFromImage(item.icon).then(color => {
                 if (color) {
                     card.style.setProperty('--icon-color', color.hex);
                     card.style.setProperty('--icon-color-rgb', color.rgb);
                     card.setAttribute('data-color-ready', '');
                 }
-            });
+            }));
         } else {
             let color = extractor.generateColorFromText(item.icon || item.title);
             card.style.setProperty('--icon-color', color.hex);
@@ -738,6 +756,8 @@ const initCardGlow = (container) => {
             card.setAttribute('data-color-ready', '');
         }
     });
+
+    for (let i = 0; i < MAX_CONCURRENT; i++) processQueue();
 };
 
 const initScrollSpy = () => {
@@ -780,7 +800,6 @@ const importConfig = (event) => {
         }
 
         if (parsedData && parsedData.categories && parsedData.items) {
-            // 前端本地查重合并流
             parsedData.categories.forEach(inCat => {
                 if (!appData.categories.some(c => c.id === inCat.id || c.name === inCat.name)) appData.categories.push(inCat);
             });
@@ -824,18 +843,121 @@ function parseEdgeHtmlBookmarks(htmlStr) {
     return { categories, items };
 }
 
-// ==================== 其余弹窗、数据逻辑保持不变 ====================
+// ==================== 完整原版：新增/编辑网站弹窗渲染 ====================
+const debouncedHandleUrlInput = utils.debounce((val) => handleUrlInput(val), 500);
+
 const openItemEdit = (id, catId) => {
-    editingType = 'items'; editingId = id;
-    const item = id ? appData.items.find(i => i.id === id) : { id: 'i' + Date.now(), title: '', url: '', desc: '', icon: '', catId };
+    editingType = 'items';
+    editingId = id;
+
+    const item = id
+        ? appData.items.find(i => i.id === id)
+        : { id: 'i' + Date.now(), title: '', url: '', desc: '', icon: '', catId: catId };
+
+    const safeUrl = utils.escapeHTML(item.url);
+    const safeTitle = utils.escapeHTML(item.title);
+    const safeIcon = utils.escapeHTML(item.icon);
+    const safeDesc = utils.escapeHTML(item.desc || '');
+    const safeBgColor = utils.escapeHTML(item.bgColor || '');
+
+    const currentCat = appData.categories.find(c => c.id === (item.catId || catId));
+    const isVideoCat = currentCat && isVideoCategory(currentCat);
+    const videoInfo = detectVideoPlatform(item.url);
+
     document.getElementById('edit-title').innerText = id ? '编辑网站' : '新增网站';
     document.getElementById('edit-form-body').innerHTML = `
-        <div class="form-row"><label>网站 URL</label><input id="f-url" value="${utils.escapeHTML(item.url)}"></div>
-        <div class="form-row"><label>网站名称</label><input id="f-title" value="${utils.escapeHTML(item.title)}"></div>
-        <div class="form-row"><label>网站描述</label><input id="f-desc" value="${utils.escapeHTML(item.desc || '')}"></div>
-        <div class="form-row"><label>图标URL</label><input id="f-icon" value="${utils.escapeHTML(item.icon)}"></div>
-        <div class="form-row"><label>归属分类</label><select id="f-cat">${appData.categories.map(c => `<option value="${c.id}" ${c.id===item.catId?'selected':''}>${c.name}</option>`).join('')}</select></div>`;
+        <div class="form-row"><label>网站 URL</label><input id="f-url" value="${safeUrl}"></div>
+        ${isVideoCat || videoInfo ? `<div style="background:rgba(57,157,255,0.1); border:1px solid rgba(57,157,255,0.3); border-radius:8px; padding:8px 12px; margin-bottom:8px; font-size:12px; color:rgba(255,255,255,0.8);">
+            <i class="ri-film-line"></i> 视频链接已自动识别，点击卡片将直接激活弹出播放器
+        </div>` : ''}
+        <div class="form-row"><label>网站名称</label><input id="f-title" value="${safeTitle}"></div>
+        <div class="form-row"><label>网站说明</label><input id="f-desc" value="${safeDesc}" placeholder="鼠标悬停时显示描述"></div>
+        <div class="form-row"><label>当前图标</label>
+            <div style="display:flex; width:100%; align-items:center;">
+                <input id="f-icon" value="${safeIcon}" placeholder="图标 URL 或单个 Emoji">
+                <div id="preview-box" class="preview-container"></div>
+            </div>
+        </div>
+        <div class="form-row"><label style="font-size:12px;color:#999;">Favicon.im</label>
+            <div style="display:flex; align-items:center; width:100%;">
+                <input type="radio" name="icon_sel" id="opt-fav1" style="width:18px; height:18px; cursor:pointer; margin-right:6px;">
+                <input id="txt-fav1" readonly placeholder="自动解析中..." style="flex:1; color:#aaa; font-size:13px; cursor:pointer;">
+                <div class="preview-container"><img id="img-fav1" src=""></div>
+            </div>
+        </div>
+        <div class="form-row"><label style="font-size:12px;color:#999;">DuckDuckGo</label>
+            <div style="display:flex; align-items:center; width:100%;">
+                <input type="radio" name="icon_sel" id="opt-fav2" style="width:18px; height:18px; cursor:pointer; margin-right:6px;">
+                <input id="txt-fav2" readonly placeholder="自动解析中..." style="flex:1; color:#aaa; font-size:13px; cursor:pointer;">
+                <div class="preview-container"><img id="img-fav2" src=""></div>
+            </div>
+        </div>
+        <div class="form-row"><label style="font-size:12px;color:#999;">网格背景色</label>
+            <div style="display:flex; align-items:center; gap:8px; width:100%;">
+                <input type="color" id="f-bg-color" value="${safeBgColor || '#399dff'}" style="width:40px; height:36px; cursor:pointer; background:transparent;">
+                <input id="f-bg-color-text" value="${safeBgColor}" placeholder="缤纷模式特定背景色，留空使用默认">
+            </div>
+        </div>
+        <div class="form-row"><label>归属分类</label>
+            <select id="f-cat">${appData.categories.map(c => `<option value="${utils.escapeHTML(c.id)}" ${c.id === item.catId ? 'selected' : ''}>${utils.escapeHTML(c.name)}</option>`).join('')}</select>
+        </div>
+    `;
+
+    const colorInput = document.getElementById('f-bg-color');
+    const colorText = document.getElementById('f-bg-color-text');
+    colorInput.addEventListener('input', () => { colorText.value = colorInput.value; });
+    colorText.addEventListener('input', () => {
+        if (/^#[0-9a-fA-F]{6}$/.test(colorText.value)) colorInput.value = colorText.value;
+    });
+
+    document.getElementById('f-url').addEventListener('input', (e) => debouncedHandleUrlInput(e.target.value));
+    document.getElementById('f-icon').addEventListener('input', (e) => updatePreview(e.target.value));
+
+    ['1', '2'].forEach(num => {
+        const opt = document.getElementById('opt-fav' + num);
+        const txt = document.getElementById('txt-fav' + num);
+        opt.addEventListener('change', () => selectIcon(txt.value));
+        txt.addEventListener('click', () => { if (txt.value) { opt.checked = true; selectIcon(txt.value); } });
+    });
+
+    updatePreview(item.icon);
+    if (item.url) handleUrlInput(item.url, false);
     document.getElementById('edit-modal').style.display = 'flex';
+};
+
+const selectIcon = (url) => {
+    if (!url) return;
+    document.getElementById('f-icon').value = url;
+    updatePreview(url);
+};
+
+const handleUrlInput = (url, autoSelect = true) => {
+    if (url && url.startsWith('http')) {
+        try {
+            const domain = new URL(url).hostname;
+            const icon1 = "https://favicon.im/" + domain;
+            const icon2 = "https://icons.duckduckgo.com/ip3/" + domain + ".ico";
+            document.getElementById('txt-fav1').value = icon1;
+            document.getElementById('img-fav1').src = icon1;
+            document.getElementById('txt-fav2').value = icon2;
+            document.getElementById('img-fav2').src = icon2;
+            const currentIconVal = document.getElementById('f-icon').value;
+            if (autoSelect && !currentIconVal) {
+                document.getElementById('opt-fav1').checked = true;
+                selectIcon(icon1);
+            }
+        } catch (e) { }
+    }
+};
+
+const updatePreview = (val) => {
+    const box = document.getElementById('preview-box');
+    if (!val) { box.innerHTML = '🔗'; return; }
+    if (val.startsWith('http')) {
+        box.innerHTML = `<img src="${utils.escapeHTML(val)}" onerror="this.outerHTML='<span class=\\'emoji-icon\\'>🌐</span>';">`;
+    } else {
+        box.innerHTML = `<span class="emoji-icon">${utils.escapeHTML(val)}</span>`;
+    }
 };
 
 const confirmEdit = () => {
@@ -844,18 +966,91 @@ const confirmEdit = () => {
     const desc = document.getElementById('f-desc').value;
     const icon = document.getElementById('f-icon').value;
     const catId = document.getElementById('f-cat').value;
+    const bgColor = document.getElementById('f-bg-color-text') ? document.getElementById('f-bg-color-text').value.trim() : '';
 
     if (editingId) {
         const idx = appData.items.findIndex(i => i.id === editingId);
-        if (idx > -1) appData.items[idx] = { ...appData.items[idx], url, title, desc, icon, catId };
+        if (idx > -1) appData.items[idx] = { ...appData.items[idx], url, title, desc, icon, bgColor, catId };
     } else {
-        appData.items.push({ id: 'i' + Date.now(), url, title, desc, icon, catId, hidden: false });
+        appData.items.push({ id: 'i' + Date.now(), url, title, desc, icon, bgColor, catId, hidden: false });
     }
     renderNav(); closeModal(); saveAll(false);
 };
 
-const toggleHide = (type, id) => { let obj = appData[type].find(o => o.id === id); if (obj) obj.hidden = !obj.hidden; saveAll(false); renderNav(); };
-const deleteObj = (type, id) => { if (confirm('确定删除？')) { appData[type] = appData[type].filter(o => o.id !== id); renderNav(); saveAll(false); } };
+// ==================== 完整原版：偏好与分类拖拽管理 ====================
+const manageCats = () => {
+    editingType = 'cats';
+    document.getElementById('edit-title').innerText = '偏好与分类设置';
+
+    const currentBg = appData.settings?.bgUrl || '';
+    const bgIsColor = /^#[0-9a-fA-F]{6}$/.test(currentBg);
+    const currentSiteName = appData.settings?.siteName || '个人导航';
+    const currentSiteIcon = appData.settings?.siteIcon || '🌐';
+
+    document.getElementById('edit-form-body').innerHTML = `
+        <div class="form-row"><label>站点图标</label><input type="text" id="setting-site-icon" value="${utils.escapeHTML(currentSiteIcon)}"></div>
+        <div class="form-row"><label>站点名称</label><input type="text" id="setting-site-name" value="${utils.escapeHTML(currentSiteName)}"></div>
+        <div class="form-row"><label>自定义背景</label>
+            <div style="display:flex; align-items:center; gap:8px; flex:1;">
+                <input type="color" id="setting-bg-color" value="${bgIsColor ? currentBg : '#222222'}" style="width:40px; height:36px; cursor:pointer; background:transparent;">
+                <input type="text" id="setting-bg" value="${utils.escapeHTML(currentBg)}" placeholder="填 URL 或纯色，留空用 Bing">
+            </div>
+        </div>
+        <div id="cat-list-sort" style="max-height:260px; overflow-y:auto; margin-top:15px;">
+            ${appData.categories.map(c => `
+                <div class="cat-item-row" data-id="${utils.escapeHTML(c.id)}" style="display:flex; gap:6px; margin-bottom:8px; align-items:center; background:rgba(255,255,255,0.05); padding:6px; border-radius:8px;">
+                    <i class="ri-drag-move-fill drag-handle" style="cursor:move;color:#888"></i>
+                    <input class="cat-icon-input" data-id="${utils.escapeHTML(c.id)}" value="${utils.escapeHTML(c.icon)}" style="width:35px; text-align:center;">
+                    <input class="cat-name-input" data-id="${utils.escapeHTML(c.id)}" value="${utils.escapeHTML(c.name)}" style="flex:1;">
+                    <label style="font-size:12px; display:flex; align-items:center; gap:2px;"><input type="checkbox" class="cat-video-toggle" data-id="${utils.escapeHTML(c.id)}" ${c._isVideo?'checked':''}>🎬</label>
+                    <button class="action-mini btn-cat-hide" data-id="${utils.escapeHTML(c.id)}"><i class="ri-eye-${c.hidden?'off-':''}line"></i></button>
+                    <button class="action-mini btn-cat-del" data-id="${utils.escapeHTML(c.id)}"><i class="ri-delete-bin-line"></i></button>
+                </div>
+            `).join('')}
+        </div>
+        <button class="tab-btn active" id="btn-add-cat" style="width:100%; margin-top:10px">+ 新增分类</button>
+    `;
+
+    document.getElementById('setting-site-icon').addEventListener('input', (e) => { if(!appData.settings) appData.settings={}; appData.settings.siteIcon = e.target.value; updateSidebarHeader(); });
+    document.getElementById('setting-site-name').addEventListener('input', (e) => { if(!appData.settings) appData.settings={}; appData.settings.siteName = e.target.value; updateSidebarHeader(); });
+    
+    const bgColorPicker = document.getElementById('setting-bg-color');
+    const bgTextInput = document.getElementById('setting-bg');
+    bgColorPicker.addEventListener('input', () => { bgTextInput.value = bgColorPicker.value; if(!appData.settings) appData.settings={}; appData.settings.bgUrl = bgColorPicker.value; applyBackgroundConfig(); });
+    bgTextInput.addEventListener('input', () => { if(!appData.settings) appData.settings={}; appData.settings.bgUrl = bgTextInput.value; applyBackgroundConfig(); });
+    
+    document.getElementById('btn-add-cat').addEventListener('click', addCat);
+
+    const catListSort = document.getElementById('cat-list-sort');
+    catListSort.addEventListener('change', (e) => {
+        let cid = e.target.getAttribute('data-id');
+        if (e.target.classList.contains('cat-icon-input')) updateCatData(cid, 'icon', e.target.value);
+        if (e.target.classList.contains('cat-name-input')) updateCatData(cid, 'name', e.target.value);
+        if (e.target.classList.contains('cat-video-toggle')) { updateCatData(cid, '_isVideo', e.target.checked); renderNav(); }
+    });
+    
+    catListSort.addEventListener('click', (e) => {
+        let hideBtn = e.target.closest('.btn-cat-hide'); if (hideBtn) toggleHide('categories', hideBtn.getAttribute('data-id'));
+        let delBtn = e.target.closest('.btn-cat-del'); if (delBtn) deleteObj('categories', delBtn.getAttribute('data-id'));
+    });
+
+    new Sortable(catListSort, {
+        animation: 150, handle: '.drag-handle', ghostClass: 'sortable-ghost',
+        onEnd: () => {
+            const newOrder = Array.from(catListSort.querySelectorAll('.cat-item-row')).map(el => el.getAttribute('data-id'));
+            appData.categories = newOrder.map(id => appData.categories.find(c => c.id === id));
+            renderNav(); saveAll(true);
+        }
+    });
+
+    document.getElementById('edit-modal').style.display = 'flex';
+};
+
+const updateCatData = (id, field, val) => { let cat = appData.categories.find(c => c.id === id); if (cat) cat[field] = val; renderNav(); };
+const addCat = () => { appData.categories.push({ id: 'cat_' + Date.now(), name: '新分类', icon: '📁', hidden: false }); manageCats(); renderNav(); };
+
+const toggleHide = (type, id) => { let obj = appData[type].find(o => o.id === id); if (obj) obj.hidden = !obj.hidden; saveAll(false); renderNav(); if (type==='categories') manageCats(); };
+const deleteObj = (type, id) => { if (confirm('确定删除？')) { appData[type] = appData[type].filter(o => o.id !== id); renderNav(); saveAll(false); if (type==='categories') manageCats(); } };
 const closeModal = () => { document.getElementById('edit-modal').style.display = 'none'; };
 
 const doLogin = async () => {
@@ -894,9 +1089,13 @@ const resetConfig = async () => {
     }
 };
 
-const manageCats = () => { showToast("日常偏好可在JSON或代码中调整"); };
 const updateSidebarHeader = () => {
-    document.getElementById('sidebar-title').textContent = appData.settings?.siteName || '个人导航';
+    const logo = document.getElementById('sidebar-logo');
+    const title = document.getElementById('sidebar-title');
+    if (logo && title) {
+        logo.textContent = appData.settings?.siteIcon || '🌐';
+        title.textContent = appData.settings?.siteName || '个人导航';
+    }
 };
 
 document.getElementById('btn-login').addEventListener('click', doLogin);
