@@ -62,7 +62,7 @@ export async function onRequest(context) {
       return new Response(JSON.stringify({ success: true, message: "已重置为默认配置" }), { headers });
     }
 
-    // 2. 处理保存数据 (POST) - 智能增量合并架构
+    // 2. 处理保存数据 (POST) - 全量覆盖模式（修复删除与排序失效问题）
     if (request.method === "POST") {
       const auth = request.headers.get("Authorization");
       if (auth !== expectedToken) {
@@ -71,45 +71,18 @@ export async function onRequest(context) {
       
       const incomingData = await request.json();
       
-      // 读取现有老配置
-      let currentDataStr = await env.nav.get("config");
-      let currentData = currentDataStr ? JSON.parse(currentDataStr) : { settings: {}, categories: [], items: [] };
+      // 【核心修复】：前端在导入 Edge 书签时已经完成了聪明的增量合并。
+      // 此处后端必须全量接收覆盖，否则在前端删除书签或拖拽排序时，云端无法同步生效。
+      const currentData = {
+        settings: incomingData.settings || {},
+        categories: incomingData.categories || [],
+        items: incomingData.items || [],
+        lastUpdated: formatCNTime(new Date())
+      };
 
-      // 1. 合并 settings
-      currentData.settings = { ...currentData.settings, ...incomingData.settings };
-
-      // 2. 增量合并 categories
-      if (incomingData.categories && Array.isArray(incomingData.categories)) {
-        incomingData.categories.forEach(inCat => {
-          const existCat = currentData.categories.find(c => c.id === inCat.id || c.name === inCat.name);
-          if (!existCat) {
-            currentData.categories.push(inCat);
-          } else {
-            existCat.icon = inCat.icon || existCat.icon;
-            if (inCat._isVideo !== undefined) existCat._isVideo = inCat._isVideo;
-          }
-        });
-      }
-
-      // 3. 增量合并 items (按 URL 查重)
-      if (incomingData.items && Array.isArray(incomingData.items)) {
-        incomingData.items.forEach(inItem => {
-          const existItem = currentData.items.find(i => i.url === inItem.url);
-          if (!existItem) {
-            currentData.items.push(inItem);
-          } else {
-            existItem.title = inItem.title || existItem.title;
-            existItem.desc = inItem.desc || existItem.desc;
-            existItem.icon = inItem.icon || existItem.icon;
-          }
-        });
-      }
-
-      currentData.lastUpdated = formatCNTime(new Date());
       await env.nav.put("config", JSON.stringify(currentData));
       return new Response(JSON.stringify({ success: true }), { headers });
     }
-
     // 3. 处理获取数据 (GET)
     if (request.method === "GET") {
       let dataStr = await env.nav.get("config");

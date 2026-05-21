@@ -2,6 +2,7 @@
  * ==========================================
  * app.js - 核心前端逻辑（全功能无损无错版）
  * 包含：Edge 增量导入、独立编辑面板、智能图标获取与全功能修复
+ * 修复内容：新增拖拽排序持久化同步、提升书签导入 URL 解析容错率
  * ==========================================
  */
 
@@ -537,6 +538,24 @@ const buildCardInnerHTML = (item, adminHtml, style) => {
         : `${glowBgHtml}${adminHtml}<a href="${safeUrl}" target="_blank"><div class="icon-wrapper">${iconHtml}</div><h3>${safeTitle}</h3></a>`;
 };
 
+// ==================== 拖拽排序同步 ====================
+const updateItemOrder = (container, catId) => {
+    const orderedIds = Array.from(container.querySelectorAll('[data-id]')).map(el => el.getAttribute('data-id'));
+    const otherItems = appData.items.filter(i => i.catId !== catId);
+    const catItems = appData.items.filter(i => i.catId === catId);
+    
+    // 按照 DOM 中拖拽后的新顺序对数据进行重排
+    catItems.sort((a, b) => {
+        let idxA = orderedIds.indexOf(a.id);
+        let idxB = orderedIds.indexOf(b.id);
+        return (idxA === -1 ? 9999 : idxA) - (idxB === -1 ? 9999 : idxB);
+    });
+    
+    // 重新组合总数据并静默保存到云端
+    appData.items = [...otherItems, ...catItems];
+    saveAll(true); 
+};
+
 const toggleCardSelection = (id) => {
     if (selectedCardIds.has(id)) selectedCardIds.delete(id); else selectedCardIds.add(id);
     updateBatchUI();
@@ -646,8 +665,17 @@ const renderNav = () => {
                 addCard.addEventListener('click', () => openItemEdit('', cat.id));
                 videoGrid.appendChild(addCard);
             }
+            
             section.appendChild(videoGrid);
             loadVideoCovers(videoGrid);
+            
+            // 为视频网格初始化拖拽排序
+            if (isAdmin && isEditMode && cat.id !== 'VIRTUAL_FREQ') {
+                new Sortable(videoGrid, {
+                    animation: 150, ghostClass: 'sortable-ghost', dragClass: 'sortable-drag', filter: '.video-card[style*="dashed"]',
+                    onEnd: (evt) => updateItemOrder(evt.to, cat.id)
+                });
+            }
         } else {
             const grid = document.createElement('div');
             grid.className = 'nav-grid'; grid.id = 'grid-' + cat.id;
@@ -704,6 +732,14 @@ const renderNav = () => {
             }
             grid.appendChild(fragment);
             section.appendChild(grid);
+            
+            // 为普通卡片网格初始化拖拽排序
+            if (isAdmin && isEditMode && cat.id !== 'VIRTUAL_FREQ') {
+                new Sortable(grid, {
+                    animation: 150, ghostClass: 'sortable-ghost', dragClass: 'sortable-drag', filter: '.card-add-new',
+                    onEnd: (evt) => updateItemOrder(evt.to, cat.id)
+                });
+            }
         }
         container.appendChild(section);
     });
@@ -841,6 +877,11 @@ function parseEdgeHtmlBookmarks(htmlStr) {
     const folderHeaders = doc.querySelectorAll('dt > h3');
     let catIndex = 0;
 
+    // 安全获取域名的辅助函数，防止特殊协议引发 new URL 崩溃
+    const getSafeDomain = (urlStr) => { 
+        try { return (urlStr && urlStr.startsWith('http')) ? new URL(urlStr).hostname : ''; } catch(e){ return ''; } 
+    };
+
     folderHeaders.forEach((h3) => {
         const name = h3.textContent.trim();
         if (['收藏夹栏', 'Bookmarks', '书签栏'].includes(name)) return;
@@ -851,7 +892,8 @@ function parseEdgeHtmlBookmarks(htmlStr) {
         if (nextDl) {
             nextDl.querySelectorAll('a').forEach((a, itemIndex) => {
                 const title = a.textContent.trim(); const url = a.getAttribute('href');
-                items.push({ id: generateItemId(catId, itemIndex), catId, title, url, desc: title, icon: "https://favicon.im/" + new URL(url).hostname, hidden: false });
+                const domain = getSafeDomain(url);
+                items.push({ id: generateItemId(catId, itemIndex), catId, title, url, desc: title, icon: domain ? "https://favicon.im/" + domain : "", hidden: false });
             });
         }
         catIndex++;

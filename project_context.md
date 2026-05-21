@@ -7,6 +7,7 @@ cloudflare-nav/
 │       ├── bilibili-cover.js
 │       ├── config.js
 │       └── defaultData.js
+├── import.html
 ├── public
 │   ├── ServiceWorker.js
 │   ├── assets
@@ -21,6 +22,251 @@ cloudflare-nav/
 │   ├── index.html
 │   └── manifest.json
 └── server.js
+
+
+## File: import.html
+
+```html
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CloudNav 收藏夹转换器 (2026版)</title>
+    <style>
+        body {
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background-color: #f5f7fa;
+            color: #2c3e50;
+            padding: 40px 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+        h2 { text-align: center; color: #3498db; margin-bottom: 30px; }
+        .upload-box {
+            border: 2px dashed #3498db;
+            padding: 40px 20px;
+            text-align: center;
+            border-radius: 8px;
+            background: #fcfdfe;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .upload-box:hover { background: #f4f9fd; }
+        input[type="file"] { display: none; }
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            background: #2ecc71;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 20px;
+            display: none;
+        }
+        .btn:hover { background: #27ae60; }
+        #status { margin-top: 15px; text-align: center; font-weight: bold; }
+        textarea {
+            width: 100%;
+            height: 300px;
+            margin-top: 20px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            padding: 10px;
+            font-family: monospace;
+            box-sizing: border-box;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🧭 CloudNav 收藏夹转换工具</h2>
+    
+    <div class="upload-box" id="drop-zone" onclick="document.getElementById('file-input').click()">
+        <p id="upload-text">📁 点击这里选择，或将 Edge 导出的 HTML 收藏夹拖放到这里</p>
+        <input type="file" id="file-input" accept=".html">
+    </div>
+
+    <div id="status"></div>
+    <button class="btn" id="download-btn">📥 下载 CloudNav 备份 JSON</button>
+    
+    <textarea id="output-json" readonly placeholder="转换后的 JSON 将显示在这里..."></textarea>
+</div>
+
+<script>
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+const statusDiv = document.getElementById('status');
+const downloadBtn = document.getElementById('download-btn');
+const outputTextarea = document.getElementById('output-json');
+
+let finalResultJson = null;
+
+// 处理文件选择
+fileInput.addEventListener('change', handleFile);
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = '#2ecc71'; });
+dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = '#3498db'; });
+dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.style.borderColor = '#3498db'; handleFile({ target: { files: e.dataTransfer.files } }); });
+
+function handleFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    statusDiv.style.color = '#34495e';
+    statusDiv.innerText = '正在解析收藏夹...';
+
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        try {
+            const htmlContent = event.target.result;
+            const parsedData = parseBookmarkHtml(htmlContent);
+            
+            finalResultJson = {
+                settings: { cardWidth: 90, cardHeightDefault: 85, cardHeightColorful: 85 },
+                categories: parsedData.categories,
+                items: parsedData.items
+            };
+
+            statusDiv.style.color = '#2ecc71';
+            statusDiv.innerText = `🎉 转换成功！共解析出 ${parsedData.categories.length} 个分类，${parsedData.items.length} 个书签。`;
+            
+            outputTextarea.value = JSON.stringify(finalResultJson, null, 2);
+            outputTextarea.style.display = 'block';
+            downloadBtn.style.display = 'block';
+        } catch (err) {
+            statusDiv.style.color = '#e74c3c';
+            statusDiv.innerText = '❌ 解析失败，请确保上传的是标准 Edge/Chrome 导出的 HTML 收藏夹。';
+            console.error(err);
+        }
+    };
+    reader.readAsText(file, "UTF-8");
+}
+
+// 核心 HTML 解析算法（支持多级目录扁平化）
+function parseBookmarkHtml(htmlStr) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlStr, 'text/html');
+    
+    const categories = [];
+    const items = [];
+    
+    // 生成分类 ID (A01, B01, C01...)
+    function generateCatId(index) {
+        const letter = String.fromCharCode(65 + (index % 26)); // A-Z
+        const num = String(Math.floor(index / 26) + 1).padStart(2, '0');
+        return `${letter}${num}`;
+    }
+
+    // 生成书签 ID (A001, A002...)
+    function generateItemId(catId, index) {
+        const letter = catId.charAt(0);
+        return `${letter}${String(index + 1).padStart(3, '0')}`;
+    }
+
+    // 智能提取 Emoji 图标
+    function getCategoryIcon(name) {
+        const emojiMap = {
+            '云端': '☁️', '公益': '🎁', '靶场': '🎯', '域名': '🌐', '社交': '💬', '视频': '🎬', '新闻': '📰', '人工智能': '🤖', 'AI': '🤖'
+        };
+        for (let key in emojiMap) {
+            if (name.includes(key)) return emojiMap[key];
+        }
+        return '📁'; // 默认图标
+    }
+
+    // 找到顶层的第一个 <DL>
+    const firstDl = doc.querySelector('dl');
+    if (!firstDl) return { categories, items };
+
+    let catIndex = 0;
+
+    // 遍历外层 DT，寻找文件夹
+    const topDts = firstDl.querySelectorAll(':scope > dt');
+    
+    // 如果没有获取到顶层（某些导出格式包裹比较深），查找所有带虚拟文件夹的 H3
+    const folderHeaders = doc.querySelectorAll('dt > h3');
+    
+    folderHeaders.forEach((h3) => {
+        const folderName = h3.textContent.trim();
+        
+        // 过滤掉“收藏夹栏”等无意义的根目录名，只提取子文件夹
+        if (folderName === '收藏夹栏' || folderName === 'Bookmarks' || folderName === '书签栏') {
+            return;
+        }
+
+        const catId = generateCatId(catIndex);
+        const icon = getCategoryIcon(folderName);
+        
+        // 1. 添加分类
+        categories.push({
+            id: catId,
+            name: folderName,
+            icon: icon,
+            hidden: false,
+            _isVideo: folderName.includes('视频') || folderName.includes('影视')
+        });
+
+        // 2. 寻找当前文件夹（H3元素）紧跟的下一个 <DL> 列表里的所有超链接
+        const nextDl = h3.parentElement.querySelector('dl');
+        if (nextDl) {
+            const links = nextDl.querySelectorAll('a');
+            links.forEach((a, itemIndex) => {
+                const title = a.textContent.trim();
+                const url = a.getAttribute('href');
+                let iconUrl = a.getAttribute('icon') || '';
+                
+                // 优化：CloudNav 自带 favicon 抓取，如果导出的 base64 图标太长，可以留空让其自动抓取，或保持原样
+                if (iconUrl.startsWith('data:image')) {
+                    // 如果你想使用默认智能图标服务，可以注释掉下面这行。保留此行会使用原收藏夹图标
+                    iconUrl = "https://favicon.im/" + new URL(url).hostname;
+                }
+
+                items.push({
+                    id: generateItemId(catId, itemIndex),
+                    catId: catId,
+                    title: title,
+                    url: url,
+                    desc: title,
+                    icon: iconUrl || ('https://favicon.im/' + new URL(url).hostname),
+                    hidden: false
+                });
+            });
+        }
+        catIndex++;
+    });
+
+    return { categories, items };
+}
+
+// 下载 JSON 功能
+downloadBtn.addEventListener('click', () => {
+    if (!finalResultJson) return;
+    const jsonStr = JSON.stringify(finalResultJson, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `cloudnav-imported-${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>
+```
 
 
 ## File: README.md
@@ -731,6 +977,7 @@ export async function onRequest(context) {
  * config.js - 后端 Serverless API 处理
  * 路由: /api/config
  * 基于 Cloudflare Pages Functions + Workers KV
+ * 升级版：支持增量智能合并 (POST)
  * ==========================================
  */
 
@@ -750,7 +997,6 @@ const getFreshDefaultData = () => ({
   lastUpdated: formatCNTime(new Date())
 });
 
-// ====== 新增：后端 SHA-256 哈希计算函数 ======
 async function sha256(text) {
   const msgBuffer = new TextEncoder().encode(text);
   const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
@@ -774,13 +1020,7 @@ export async function onRequest(context) {
   };
 
   try {
-    // ==========================================
-    // 核心安全优化：动态识别明文与哈希
-    // ==========================================
     let expectedToken = env.TOKEN || "";
-    // SHA-256 哈希值的固定长度是 64。
-    // 如果长度不是 64，说明你在 Cloudflare 后台填的是“明文密码”。
-    // 我们就在后端内部安全地将其转为哈希值，用来与前端发来的哈希值比对。
     if (expectedToken.length !== 64) {
       expectedToken = await sha256(expectedToken);
     }
@@ -796,15 +1036,51 @@ export async function onRequest(context) {
       return new Response(JSON.stringify({ success: true, message: "已重置为默认配置" }), { headers });
     }
 
-    // 2. 处理保存数据 (POST)
+    // 2. 处理保存数据 (POST) - 智能增量合并架构
     if (request.method === "POST") {
       const auth = request.headers.get("Authorization");
       if (auth !== expectedToken) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
       }
-      const newData = await request.json();
-      newData.lastUpdated = formatCNTime(new Date());
-      await env.nav.put("config", JSON.stringify(newData));
+      
+      const incomingData = await request.json();
+      
+      // 读取现有老配置
+      let currentDataStr = await env.nav.get("config");
+      let currentData = currentDataStr ? JSON.parse(currentDataStr) : { settings: {}, categories: [], items: [] };
+
+      // 1. 合并 settings
+      currentData.settings = { ...currentData.settings, ...incomingData.settings };
+
+      // 2. 增量合并 categories
+      if (incomingData.categories && Array.isArray(incomingData.categories)) {
+        incomingData.categories.forEach(inCat => {
+          const existCat = currentData.categories.find(c => c.id === inCat.id || c.name === inCat.name);
+          if (!existCat) {
+            currentData.categories.push(inCat);
+          } else {
+            existCat.icon = inCat.icon || existCat.icon;
+            if (inCat._isVideo !== undefined) existCat._isVideo = inCat._isVideo;
+          }
+        });
+      }
+
+      // 3. 增量合并 items (按 URL 查重)
+      if (incomingData.items && Array.isArray(incomingData.items)) {
+        incomingData.items.forEach(inItem => {
+          const existItem = currentData.items.find(i => i.url === inItem.url);
+          if (!existItem) {
+            currentData.items.push(inItem);
+          } else {
+            existItem.title = inItem.title || existItem.title;
+            existItem.desc = inItem.desc || existItem.desc;
+            existItem.icon = inItem.icon || existItem.icon;
+          }
+        });
+      }
+
+      currentData.lastUpdated = formatCNTime(new Date());
+      await env.nav.put("config", JSON.stringify(currentData));
       return new Response(JSON.stringify({ success: true }), { headers });
     }
 
@@ -815,7 +1091,6 @@ export async function onRequest(context) {
 
       const url = new URL(request.url);
       const auth = request.headers.get("Authorization") || url.searchParams.get("token");
-      // 使用转换后的哈希值进行验证
       const isAdmin = (auth === expectedToken);
 
       if (!isAdmin) {
@@ -906,49 +1181,37 @@ export const defaultData = {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>个人网站导航</title>
     
-    <!-- DNS 预解析与预连接 -->
     <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     
-    <!-- RemixIcon 图标字体（异步加载，不阻塞 load 事件）
-         先用 media="print" 让浏览器异步下载，下载完成后切换为 screen -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" media="print" onload="this.media='all'">
     <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css"></noscript>
     
-    <!-- Favicon（内联 SVG，零网络请求） -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌐</text></svg>">
     <link rel="shortcut icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌐</text></svg>">
     
-    <!-- PWA 配置 -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#111111">
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌐</text></svg>">
     
-    <!-- 拖拽排序库 -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js" defer></script>
     
-    <!-- 样式文件 -->
     <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
-    <!-- Toast 提示 -->
     <div id="toast">操作成功</div>
     
-    <!-- 全局加载遮罩 -->
     <div id="global-loading-overlay" class="modal" style="z-index: 9999;">
         <div class="global-spinner"></div>
         <div id="global-loading-text" style="color: #fff; font-size: 15px; font-weight: bold; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">正在处理中...</div>
     </div>
 
-    <!-- 移动端汉堡菜单按钮 -->
     <button id="sidebar-toggle" class="sidebar-toggle" aria-label="打开导航菜单">
         <i class="ri-menu-line"></i>
     </button>
-    <!-- 移动端遮罩 -->
     <div id="sidebar-overlay" class="sidebar-overlay"></div>
 
     <div class="app-layout">
-        <!-- 左侧导航栏 -->
         <aside id="sidebar" class="sidebar">
             <div class="sidebar-header">
                 <span class="sidebar-logo" id="sidebar-logo">🌐</span>
@@ -968,9 +1231,7 @@ export const defaultData = {
             </div>
         </aside>
 
-        <!-- 主内容区域 -->
         <main class="main-content">
-            <!-- 骨架屏（加载占位） -->
             <div id="skeleton-screen">
                 <div class="skel-tabs">
                     <div class="skel-tab skel-anim"></div>
@@ -987,20 +1248,16 @@ export const defaultData = {
                 </div>
             </div>
 
-            <!-- 导航内容 -->
             <div id="main-content" style="display: none;">
                 <div id="grid-container" class="grid-container"></div>
             </div>
         </main>
     </div>
     
-    <!-- 页脚缓存信息 -->
     <div id="footer-cache" class="footer-info"></div>
     
-    <!-- 隐藏的文件输入框（用于导入配置） -->
-    <input type="file" id="import-file" accept=".json" style="display:none">
+    <input type="file" id="import-file" accept=".json,.html" style="display:none">
 
-    <!-- 登录验证弹窗 -->
     <div id="auth-overlay" class="modal">
         <div class="modal-content" style="text-align:center">
             <button id="btn-close-auth" style="position:absolute; top:15px; right:15px; background:none; border:none; color:#777; cursor:pointer; font-size:24px">×</button>
@@ -1010,7 +1267,6 @@ export const defaultData = {
         </div>
     </div>
 
-    <!-- 编辑弹窗 -->
     <div id="edit-modal" class="modal">
         <div class="modal-content">
             <button id="btn-close-edit" style="position:absolute; top:15px; right:15px; background:none; border:none; color:#777; cursor:pointer; font-size:24px">×</button>
@@ -1020,7 +1276,6 @@ export const defaultData = {
         </div>
     </div>
 
-    <!-- 视频播放弹窗 -->
     <div id="video-modal" class="modal">
         <div class="video-modal-content">
             <button id="btn-close-video" class="video-close-btn"><i class="ri-close-line"></i></button>
@@ -1037,7 +1292,6 @@ export const defaultData = {
         </div>
     </div>
 
-    <!-- Monaco Editor 弹窗 -->
     <div id="monaco-modal" class="modal">
         <div class="monaco-modal-content">
             <div class="monaco-header">
@@ -1052,13 +1306,11 @@ export const defaultData = {
         </div>
     </div>
 
-    <!-- JavaScript 文件 -->
     <script src="/assets/js/utils.js"></script>
     <script src="/assets/js/colorExtractor.js"></script>
     <script src="/assets/js/app.js"></script>
 </body>
 </html>
-
 ```
 
 
@@ -1096,14 +1348,12 @@ export const defaultData = {
 /**
  * ==========================================
  * ServiceWorker.js - PWA 核心脚本
- * 实现 Stale-While-Revalidate 缓存策略
+ * 标准放行版：彻底修复 POST/DELETE 请求无法穿透到云端数据库的问题
  * ==========================================
  */
 
-// 缓存版本号（更新时需修改）
-const CACHE_NAME = 'nav-cache-v7';
+const CACHE_NAME = 'nav-cache-v10'; // 升级版本号，强行刷新之前的错误静态缓存
 
-// 需要缓存的核心静态资源
 const URLS_TO_CACHE = [
   '/',
   '/index.html',
@@ -1116,29 +1366,21 @@ const URLS_TO_CACHE = [
   'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js'
 ];
 
-/**
- * 安装事件
- * @description 缓存核心静态资源，跳过等待直接激活
- *               单个资源失败不影响其他资源的缓存
- */
+// 安装时缓存静态资源
 self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      // 逐个缓存，单个失败不影响整体（比 cache.addAll 更健壮）
       return Promise.allSettled(
         URLS_TO_CACHE.map(url =>
-          cache.add(url).catch(err => console.warn('SW 缓存失败:', url, err.message))
+          cache.add(url).catch(err => console.warn('SW 缓存静态资源失败:', url, err.message))
         )
       );
     })
   );
 });
 
-/**
- * 激活事件
- * @description 清理旧版本缓存，确保只保留当前版本
- */
+// 激活时清理旧缓存
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(cacheNames => {
@@ -1153,15 +1395,16 @@ self.addEventListener('activate', event => {
   );
 });
 
-/**
- * 请求拦截事件
- */
+// 核心网络请求拦截器
 self.addEventListener('fetch', event => {
-  // API 请求不走 SW 缓存
-  if (event.request.url.includes('/api/')) return;
+  // 【核心修复】：如果请求包含 /api/，这是后端的动态接口（包含你的 GET 刷新、POST 保存、DELETE 重置）
+  // 必须使用 event.respondWith(fetch(event.request)) 顺畅地把它放行到真实的网络和 Cloudflare 数据库上！
+  if (event.request.url.includes('/api/')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
 
-  // 1. 对于 HTML 页面请求，优先使用缓存，后台更新（Stale-While-Revalidate）
-  //    避免每次导航都等待网络，提升首屏加载速度
+  // 1. 静态 HTML 页面请求流（采用 Stale-While-Revalidate 策略，后台更新）
   const acceptHeader = event.request.headers.get('accept') || '';
   if (event.request.mode === 'navigate' || acceptHeader.includes('text/html')) {
     event.respondWith(
@@ -1178,7 +1421,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 2. 其他静态资源 (CSS/JS/图片) 保持 Stale-While-Revalidate (缓存优先并后台更新)
+  // 2. 其余静态资源 (CSS/JS/字体等)
   event.respondWith(
     caches.match(event.request).then(cachedResponse => {
       const fetchPromise = fetch(event.request).then(networkResponse => {
@@ -3259,11 +3502,8 @@ body.view-style-2 .card[data-tooltip]::before {
 ```js
 ﻿/**
  * ==========================================
- * app.js - 核心前端逻辑（升级版 v5）
- * CloudNav 个人导航页主程序
- * 支持：左侧导航、连续滚动、视频导航、Monaco Editor
- * Style 0: 经典图标网格
- * Style 2: 缤纷模式
+ * app.js - 核心前端逻辑（全功能无损无错版）
+ * 包含：Edge 增量导入、独立编辑面板、智能图标获取与全功能修复
  * ==========================================
  */
 
@@ -3272,6 +3512,7 @@ let appData = { settings: { siteName: '个人导航', siteIcon: '🌐', cardHeig
 let activeCatId = '';
 let sysToken = localStorage.getItem('nav_token') || '';
 let isAdmin = false;
+let isEditMode = false; // 控制管理员是否开启显式编辑面板
 let editingType = 'items';
 let editingId = null;
 let toastTimer = null;
@@ -3285,15 +3526,10 @@ let monacoEditor = null;
 // ==================== Bilibili 封面缓存 ====================
 const bilibiliCoverCache = new Map();
 
-/**
- * 异步获取 Bilibili 视频封面 URL
- * @param {string} bvid - BV 号
- * @returns {Promise<string|null>} 封面图片 URL
- */
 const fetchBilibiliCover = async (bvid) => {
     if (bilibiliCoverCache.has(bvid)) return bilibiliCoverCache.get(bvid);
     try {
-        const res = await fetch(`/api/bilibili-cover?bvid=${bvid}`);
+        const res = await fetch(`/api/bilibili-cover?bvid=${bvid}&_t=${Date.now()}`);
         const data = await res.json();
         if (data.coverUrl) {
             bilibiliCoverCache.set(bvid, data.coverUrl);
@@ -3305,10 +3541,6 @@ const fetchBilibiliCover = async (bvid) => {
     return null;
 };
 
-/**
- * 批量异步加载视频卡片封面（在 DOM 插入后调用）
- * @param {HTMLElement} container - 包含 video-card 的容器
- */
 const loadVideoCovers = async (container) => {
     const coverSlots = container.querySelectorAll('.video-cover-slot[data-bvid]');
     for (const slot of coverSlots) {
@@ -3317,7 +3549,6 @@ const loadVideoCovers = async (container) => {
         if (coverUrl) {
             slot.innerHTML = `<img src="${coverUrl}" alt="" loading="lazy" referrerpolicy="no-referrer"
                 onerror="this.style.display='none'; this.nextElementSibling && (this.nextElementSibling.style.display='flex');">`;
-            // 隐藏 fallback
             const fallback = slot.querySelector('.video-card-cover-fallback');
             if (fallback) fallback.style.display = 'none';
         }
@@ -3325,23 +3556,16 @@ const loadVideoCovers = async (container) => {
 };
 
 // ==================== 视频平台检测 ====================
-
-/**
- * 检测URL是否为视频平台链接
- * @returns {{ type: 'bilibili'|'youtube', videoId: string, bvid?: string, aid?: string } | null}
- */
 const detectVideoPlatform = (url) => {
     if (!url || !url.startsWith('http')) return null;
     try {
         const urlObj = new URL(url);
-        // Bilibili 检测
         if (urlObj.hostname.includes('bilibili.com')) {
             const bvidMatch = urlObj.pathname.match(/\/video\/(BV[a-zA-Z0-9]+)/);
             if (bvidMatch) return { type: 'bilibili', videoId: bvidMatch[1], bvid: bvidMatch[1] };
             const avidMatch = urlObj.pathname.match(/\/video\/av(\d+)/);
             if (avidMatch) return { type: 'bilibili', videoId: 'av' + avidMatch[1], aid: avidMatch[1] };
         }
-        // YouTube 检测
         if (urlObj.hostname.includes('youtube.com') || urlObj.hostname === 'youtu.be') {
             let videoId = '';
             if (urlObj.hostname === 'youtu.be') {
@@ -3359,33 +3583,20 @@ const detectVideoPlatform = (url) => {
     return null;
 };
 
-/**
- * 生成视频嵌入 iframe URL
- */
 const getVideoEmbedUrl = (videoInfo) => {
     if (!videoInfo) return '';
     if (videoInfo.type === 'bilibili') {
-        if (videoInfo.bvid) {
-            return `//player.bilibili.com/player.html?bvid=${videoInfo.bvid}&autoplay=1&high_quality=1`;
-        }
-        if (videoInfo.aid) {
-            return `//player.bilibili.com/player.html?aid=${videoInfo.aid}&autoplay=1&high_quality=1`;
-        }
+        if (videoInfo.bvid) return `//player.bilibili.com/player.html?bvid=${videoInfo.bvid}&autoplay=1&high_quality=1`;
+        if (videoInfo.aid) return `//player.bilibili.com/player.html?aid=${videoInfo.aid}&autoplay=1&high_quality=1`;
     }
-    if (videoInfo.type === 'youtube') {
-        return `https://www.youtube.com/embed/${videoInfo.videoId}?autoplay=1`;
-    }
+    if (videoInfo.type === 'youtube') return `https://www.youtube.com/embed/${videoInfo.videoId}?autoplay=1`;
     return '';
 };
 
-/**
- * 判断分类是否为视频分类（名称包含"视频"或图标为特定emoji）
- */
 const isVideoCategory = (cat) => {
     return cat.name.includes('视频') || cat.icon === '🎬' || cat.icon === '📺' || cat.icon === '🎥' || cat._isVideo;
 };
 
-// ==================== 安全与工具函数 ====================
 const hashPassword = async (password) => {
     const msgBuffer = new TextEncoder().encode(password);
     const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
@@ -3395,10 +3606,19 @@ const hashPassword = async (password) => {
 
 // ==================== 初始化入口 ====================
 document.addEventListener('DOMContentLoaded', () => {
-    // 注册 Service Worker（在 load 事件后注册，不阻塞页面加载）
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('/ServiceWorker.js')
+                .then(reg => {
+                    reg.addEventListener('updatefound', () => {
+                        const newWorker = reg.installing;
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                showToast("系统更新就绪，请手动刷新刷新页面更新UI", "#3498db");
+                            }
+                        });
+                    });
+                })
                 .catch(err => console.log('SW 注册失败:', err));
         });
     }
@@ -3407,7 +3627,6 @@ document.addEventListener('DOMContentLoaded', () => {
     initSimpleMode();
     initSidebar();
 
-    // 全局监听卡片点击
     document.getElementById('grid-container').addEventListener('click', (e) => {
         const card = e.target.closest('.card');
         const link = e.target.closest('a');
@@ -3424,13 +3643,9 @@ document.addEventListener('DOMContentLoaded', () => {
     initMonacoModal();
     init();
 
-    // 页面完全加载后确保隐藏加载遮罩（安全兜底）
-    window.addEventListener('load', () => {
-        hideLoader();
-    });
+    window.addEventListener('load', () => { hideLoader(); });
 });
 
-// ==================== 侧边栏初始化 ====================
 const initSidebar = () => {
     const toggle = document.getElementById('sidebar-toggle');
     const overlay = document.getElementById('sidebar-overlay');
@@ -3446,7 +3661,6 @@ const initSidebar = () => {
         overlay.classList.remove('visible');
     });
 
-    // 点击侧边栏导航项后关闭（移动端）
     document.getElementById('sidebar-nav').addEventListener('click', (e) => {
         const item = e.target.closest('.sidebar-nav-item');
         if (item && window.innerWidth <= 768) {
@@ -3456,10 +3670,8 @@ const initSidebar = () => {
     });
 };
 
-// ==================== 视频播放弹窗 ====================
 const initVideoModal = () => {
     document.getElementById('btn-close-video').addEventListener('click', closeVideoModal);
-    // 不允许点击弹窗外区域关闭，只能通过关闭按钮退出
 };
 
 const openVideoModal = (item, videoInfo) => {
@@ -3474,21 +3686,17 @@ const openVideoModal = (item, videoInfo) => {
 };
 
 const closeVideoModal = () => {
-    const iframe = document.getElementById('video-iframe');
-    iframe.src = '';
+    document.getElementById('video-iframe').src = '';
     document.getElementById('video-modal').style.display = 'none';
 };
 
-// ==================== Monaco Editor 弹窗 ====================
 const initMonacoModal = () => {
     document.getElementById('btn-close-monaco').addEventListener('click', closeMonacoModal);
     document.getElementById('monaco-modal').addEventListener('click', (e) => {
         if (e.target === e.currentTarget) closeMonacoModal();
     });
     document.getElementById('btn-monaco-format').addEventListener('click', () => {
-        if (monacoEditor) {
-            monacoEditor.getAction('editor.action.formatDocument').run();
-        }
+        if (monacoEditor) monacoEditor.getAction('editor.action.formatDocument').run();
     });
     document.getElementById('btn-monaco-save').addEventListener('click', saveMonacoData);
 };
@@ -3503,10 +3711,8 @@ const openMonacoEditor = () => {
         return;
     }
 
-    // 显示加载提示在容器中
     container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#aaa;font-size:14px;"><i class="ri-loader-4-line" style="animation:spin 1s linear infinite;margin-right:8px;"></i>正在加载代码编辑器...</div>';
 
-    // 动态加载 Monaco Editor loader 脚本（按需加载，不阻塞页面初始加载）
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js';
     script.onload = () => {
@@ -3520,21 +3726,14 @@ const openMonacoEditor = () => {
                 automaticLayout: true,
                 minimap: { enabled: true },
                 fontSize: 14,
-                lineNumbers: 'on',
-                scrollBeyondLastLine: false,
                 wordWrap: 'on',
-                tabSize: 2,
-                formatOnPaste: true,
-                formatOnType: true
+                tabSize: 2
             });
-            // 注册格式化快捷键
-            monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-                saveMonacoData();
-            });
+            monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => { saveMonacoData(); });
         });
     };
     script.onerror = () => {
-        container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#e74c3c;font-size:14px;">代码编辑器加载失败，请检查网络后重试</div>';
+        container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#e74c3c;font-size:14px;">代码编辑器加载失败</div>';
     };
     document.body.appendChild(script);
 };
@@ -3545,7 +3744,7 @@ const saveMonacoData = () => {
         const text = monacoEditor.getValue();
         const parsed = JSON.parse(text);
         if (!parsed.categories || !parsed.items) {
-            showToast('JSON 格式不正确：需要 categories 和 items 字段', '#e74c3c');
+            showToast('JSON 格式不正确', '#e74c3c');
             return;
         }
         appData = { ...appData, ...parsed, isAdmin: appData.isAdmin, bgUrl: appData.bgUrl };
@@ -3561,23 +3760,13 @@ const saveMonacoData = () => {
     }
 };
 
-const closeMonacoModal = () => {
-    document.getElementById('monaco-modal').style.display = 'none';
-};
+const closeMonacoModal = () => { document.getElementById('monaco-modal').style.display = 'none'; };
+const getCleanAppData = () => { const data = { ...appData }; delete data.isAdmin; delete data.bgUrl; return data; };
 
-const getCleanAppData = () => {
-    const data = { ...appData };
-    delete data.isAdmin;
-    delete data.bgUrl;
-    return data;
-};
-
-// ==================== 样式切换 ====================
 const initStyleSwitcher = () => {
     document.querySelectorAll('.sidebar-style-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-            const style = parseInt(btn.getAttribute('data-style'));
-            setViewStyle(style);
+            setViewStyle(parseInt(btn.getAttribute('data-style')));
         });
     });
     applyViewStyle(currentViewStyle);
@@ -3593,63 +3782,28 @@ const setViewStyle = (style) => {
 
 const applyViewStyle = (style) => {
     document.body.classList.remove('view-style-0', 'view-style-2');
-    if (style !== 0) {
-        document.body.classList.add('view-style-' + style);
-    }
+    if (style !== 0) document.body.classList.add('view-style-' + style);
     document.querySelectorAll('.sidebar-style-btn').forEach(btn => {
         btn.classList.toggle('active', parseInt(btn.getAttribute('data-style')) === style);
     });
 };
 
-// ==================== 主题切换功能 ====================
 const initThemeMode = () => { applyThemeMode(); };
-
 const applyThemeMode = () => {
     document.body.classList.remove('light-theme', 'dark-theme');
-    if (themeMode === 'light') {
-        document.body.classList.add('light-theme');
-    } else if (themeMode === 'dark') {
-        document.body.classList.add('dark-theme');
-    }
+    if (themeMode === 'light') document.body.classList.add('light-theme');
+    else if (themeMode === 'dark') document.body.classList.add('dark-theme');
 };
 
-const toggleThemeMode = () => {
-    if (themeMode === 'auto') themeMode = 'light';
-    else if (themeMode === 'light') themeMode = 'dark';
-    else themeMode = 'auto';
-    localStorage.setItem('nav_theme_mode', themeMode);
-    applyThemeMode();
-    showToast(`主题: ${getThemeModeLabel()}`);
-};
+const initSimpleMode = () => { if (simpleMode) document.body.classList.add('no-blur'); };
 
-const getThemeModeLabel = () => {
-    const labels = { auto: '跟随系统', light: '亮色', dark: '暗色' };
-    return labels[themeMode] || '跟随系统';
-};
-
-// ==================== 简约模式 ====================
-const initSimpleMode = () => {
-    if (simpleMode) document.body.classList.add('no-blur');
-};
-
-const toggleSimpleMode = () => {
-    simpleMode = !simpleMode;
-    localStorage.setItem('nav_simple_mode', simpleMode);
-    document.body.classList.toggle('no-blur', simpleMode);
-    showToast(simpleMode ? '已开启简约模式' : '已关闭简约模式');
-};
-
-// ==================== 核心函数 ====================
 const updateGridWidth = () => {
-    // 卡片宽度固定为 85px（由默认高度/缤纷高度独立控制卡片高度）
     document.documentElement.style.setProperty('--card-w', '85px');
     document.documentElement.style.setProperty('--card-h', '85px');
-    // 默认样式与缤纷样式各自独立的高度
     const hDefault = (appData.settings && appData.settings.cardHeightDefault) ? appData.settings.cardHeightDefault : 85;
     const hColorful = (appData.settings && appData.settings.cardHeightColorful) ? appData.settings.cardHeightColorful : 85;
     document.documentElement.style.setProperty('--card-h-default', hDefault + 'px');
     document.documentElement.style.setProperty('--card-h-colorful', hColorful + 'px');
-    // 默认样式与缤纷样式各自独立的图标尺寸
     const iconSizeDefault = (appData.settings && appData.settings.iconSizeDefault) ? appData.settings.iconSizeDefault : 32;
     const iconSizeColorful = (appData.settings && appData.settings.iconSizeColorful) ? appData.settings.iconSizeColorful : 32;
     document.documentElement.style.setProperty('--icon-size-default', iconSizeDefault + 'px');
@@ -3662,10 +3816,7 @@ const showLoader = (text = '正在处理中...') => {
     document.getElementById('global-loading-text').innerText = text;
     document.getElementById('global-loading-overlay').style.display = 'flex';
 };
-
-const hideLoader = () => {
-    document.getElementById('global-loading-overlay').style.display = 'none';
-};
+const hideLoader = () => { document.getElementById('global-loading-overlay').style.display = 'none'; };
 
 const showToast = (msg = "操作成功", color = "#27ae60") => {
     const toast = document.getElementById('toast');
@@ -3683,12 +3834,7 @@ const toggleSkeleton = (show) => {
 
 const loadBackground = async (url) => {
     if (!url) return;
-    
-    // 用 CSS background-image 直接加载（不阻塞浏览器 load 事件）
-    // 浏览器原生管理图片加载，即使图片慢也不会让标签页一直转圈
     document.body.style.backgroundImage = `url('${url}')`;
-    
-    // 后台尝试缓存到 Cache API，不影响页面加载
     try {
         const bgCacheName = 'nav-bg-cache-v1';
         const cache = await caches.open(bgCacheName);
@@ -3698,7 +3844,6 @@ const loadBackground = async (url) => {
             document.body.style.backgroundImage = `url('${URL.createObjectURL(blob)}')`;
             return;
         }
-        // 后台 fetch 更新缓存（不 await，完全异步）
         fetch(url, { mode: 'cors' }).then(async response => {
             if (response.ok) {
                 await cache.put(url, response.clone());
@@ -3706,9 +3851,7 @@ const loadBackground = async (url) => {
                 document.body.style.backgroundImage = `url('${URL.createObjectURL(blob)}')`;
             }
         }).catch(() => { });
-    } catch (e) {
-        // Cache API 不可用时忽略，CSS background 已直接设置
-    }
+    } catch (e) { }
 };
 
 const applyBackgroundConfig = () => {
@@ -3726,8 +3869,7 @@ const applyBackgroundConfig = () => {
 };
 
 const init = async (forceRender = false) => {
-    let fetchUrl = '/api/config';
-    const gridContainer = document.getElementById('grid-container');
+    let fetchUrl = `/api/config?_t=${Date.now()}`;
     const localCache = localStorage.getItem('nav_app_data');
     let initialIsAdmin = isAdmin;
 
@@ -3745,15 +3887,10 @@ const init = async (forceRender = false) => {
             if (appData.lastUpdated) {
                 document.getElementById('footer-cache').innerText = '最后同步：' + utils.escapeHTML(appData.lastUpdated);
             }
-        } catch (e) {
-            toggleSkeleton(true);
-        }
-    } else {
-        toggleSkeleton(true);
-    }
+        } catch (e) { toggleSkeleton(true); }
+    } else { toggleSkeleton(true); }
 
     try {
-        // 添加 8 秒超时保护，防止 API 冷启动慢时页面挂起
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 8000);
         const res = await fetch(fetchUrl, {
@@ -3764,11 +3901,7 @@ const init = async (forceRender = false) => {
         clearTimeout(timeoutId);
 
         if (!res.ok) {
-            if (res.status === 401) {
-                localStorage.removeItem('nav_token');
-                sysToken = '';
-                isAdmin = false;
-            }
+            if (res.status === 401) { localStorage.removeItem('nav_token'); sysToken = ''; isAdmin = false; }
             throw new Error(`HTTP Error ${res.status}`);
         }
 
@@ -3791,42 +3924,27 @@ const init = async (forceRender = false) => {
             renderTools();
             renderNav();
         }
-
         if (appData.lastUpdated) {
             document.getElementById('footer-cache').innerText = '最后同步：' + utils.escapeHTML(appData.lastUpdated);
         }
-
     } catch (e) {
-        if (e.name === 'AbortError') {
-            console.error("API 请求超时", e);
-            if (!localCache) {
-                gridContainer.innerHTML = `<div style="margin:50px auto; padding:20px; background:rgba(255,165,0,0.2); border:1px solid orange; border-radius:10px; text-align:left;">
-                    <h3 style="color:#f39c12; margin-bottom:10px;">⏱️ 数据加载超时</h3>
-                    <p>服务器响应超时，已显示本地缓存数据（如有）</p>
-                </div>`;
-                toggleSkeleton(false);
-            }
-        } else {
-            console.error("后台数据更新失败", e);
-            if (!localCache) {
-                gridContainer.innerHTML = `<div style="margin:50px auto; padding:20px; background:rgba(255,0,0,0.2); border:1px solid red; border-radius:10px; text-align:left;">
-                    <h3 style="color:#ff6b6b; margin-bottom:10px;">⚠️ 数据加载失败</h3>
-                    <p>${utils.escapeHTML(e.message)}</p>
-                </div>`;
-                toggleSkeleton(false);
-            }
-        }
+        console.error("数据同步流错误", e);
+        toggleSkeleton(false);
     }
 };
 
-// ==================== 管理工具渲染 ====================
+// ==================== 管理面板侧边栏渲染 ====================
 const renderTools = () => {
     const sidebarAdminActions = document.getElementById('sidebar-admin-actions');
     sidebarAdminActions.innerHTML = '';
 
-    const createSidebarBtn = (icon, text, action) => {
+    const createSidebarBtn = (icon, text, action, isSpecial = false, isActive = false) => {
         const btn = document.createElement('div');
-        btn.className = 'sidebar-nav-item';
+        btn.className = 'sidebar-nav-item' + (isActive ? ' active' : '');
+        if (isSpecial) {
+            btn.style.background = isActive ? 'rgba(230, 126, 34, 0.9)' : 'rgba(255,255,255,0.06)';
+            btn.style.boxShadow = isActive ? '0 2px 10px rgba(230, 126, 34, 0.4)' : 'none';
+        }
         btn.innerHTML = `<span class="nav-icon"><i class="${icon}"></i></span><span class="nav-label">${text}</span>`;
         btn.addEventListener('click', action);
         sidebarAdminActions.appendChild(btn);
@@ -3834,7 +3952,13 @@ const renderTools = () => {
 
     if (isAdmin) {
         document.title = "管理后台";
-        // 侧边栏底部管理按钮
+        // 独立显式编辑面板控制开关
+        createSidebarBtn(isEditMode ? 'ri-lock-unlock-line' : 'ri-lock-line', isEditMode ? '关闭编辑面板' : '开启编辑面板', () => {
+            isEditMode = !isEditMode;
+            renderTools();
+            renderNav();
+        }, true, isEditMode);
+
         createSidebarBtn('ri-settings-3-line', '偏好设置', manageCats);
         createSidebarBtn('ri-code-s-slash-line', 'JSON编辑', openMonacoEditor);
         createSidebarBtn('ri-save-line', '保存', () => saveAll(false));
@@ -3851,53 +3975,26 @@ const renderTools = () => {
     }
 };
 
-// ==================== 图标多源降级工具 ====================
-/**
- * 从URL提取域名
- */
-const extractDomain = function (url) {
-    try { return new URL(url).hostname; } catch (e) { return null; }
-};
-
-/**
- * 获取备用图标 URL（在不同 favicon 服务间切换）
- */
-const getAltFaviconUrl = function (currentSrc, itemUrl) {
-    var domain = extractDomain(itemUrl);
+const extractDomain = (url) => { try { return new URL(url).hostname; } catch (e) { return null; } };
+const getAltFaviconUrl = (currentSrc, itemUrl) => {
+    let domain = extractDomain(itemUrl);
     if (!domain) return null;
-    if (currentSrc && currentSrc.indexOf('favicon.im') !== -1) {
-        return 'https://icons.duckduckgo.com/ip3/' + domain + '.ico';
-    }
-    return 'https://favicon.im/' + domain;
+    return currentSrc && currentSrc.includes('favicon.im') ? 'https://icons.duckduckgo.com/ip3/' + domain + '.ico' : 'https://favicon.im/' + domain;
 };
 
-/**
- * 图标加载失败时的智能降级处理（全局挂载）
- * 先尝试备用图标源，都失败后才回退到 emoji
- * 备用源使用 off-DOM Image 预加载验证，避免 404 URL 产生控制台报错
- */
 window.handleIconError = function (img) {
-    if (img.dataset.fallbackTried) {
-        img.outerHTML = '<span class="emoji-icon">' + window.utils.getRandomEmoji() + '</span>';
-        return;
-    }
+    if (img.dataset.fallbackTried) { img.outerHTML = '<span class="emoji-icon">' + window.utils.getRandomEmoji() + '</span>'; return; }
     img.dataset.fallbackTried = '1';
-    var card = img.closest('.card');
+    let card = img.closest('.card');
     if (card) {
-        var itemId = card.getAttribute('data-id');
-        var item = appData.items.find(function (i) { return i.id === itemId; });
+        let itemId = card.getAttribute('data-id');
+        let item = appData.items.find(i => i.id === itemId);
         if (item && item.url) {
-            var altSrc = getAltFaviconUrl(img.src, item.url);
+            let altSrc = getAltFaviconUrl(img.src, item.url);
             if (altSrc) {
-                // 创建 off-DOM Image 对象预加载备用源
-                // 不在 DOM 中的 Image 加载失败不会触发控制台 404 报错
-                var preloader = new Image();
-                preloader.onload = function () {
-                    img.src = altSrc;
-                };
-                preloader.onerror = function () {
-                    img.outerHTML = '<span class="emoji-icon">' + window.utils.getRandomEmoji() + '</span>';
-                };
+                let preloader = new Image();
+                preloader.onload = () => { img.src = altSrc; };
+                preloader.onerror = () => { img.outerHTML = '<span class="emoji-icon">' + window.utils.getRandomEmoji() + '</span>'; };
                 preloader.src = altSrc;
                 return;
             }
@@ -3906,30 +4003,19 @@ window.handleIconError = function (img) {
     img.outerHTML = '<span class="emoji-icon">' + window.utils.getRandomEmoji() + '</span>';
 };
 
-/**
- * glow-bg 图片的降级处理（静默隐藏，避免控制台报错）
- * 备用源使用 off-DOM Image 预加载验证，避免 404 URL 产生控制台报错
- */
 window.handleGlowIconError = function (img) {
-    if (img.dataset.fallbackTried) {
-        img.style.display = 'none';
-        return;
-    }
+    if (img.dataset.fallbackTried) { img.style.display = 'none'; return; }
     img.dataset.fallbackTried = '1';
-    var card = img.closest('.card');
+    let card = img.closest('.card');
     if (card) {
-        var itemId = card.getAttribute('data-id');
-        var item = appData.items.find(function (i) { return i.id === itemId; });
+        let itemId = card.getAttribute('data-id');
+        let item = appData.items.find(i => i.id === itemId);
         if (item && item.url) {
-            var altSrc = getAltFaviconUrl(img.src, item.url);
+            let altSrc = getAltFaviconUrl(img.src, item.url);
             if (altSrc) {
-                var preloader = new Image();
-                preloader.onload = function () {
-                    img.src = altSrc;
-                };
-                preloader.onerror = function () {
-                    img.style.display = 'none';
-                };
+                let preloader = new Image();
+                preloader.onload = () => { img.src = altSrc; };
+                preloader.onerror = () => { img.style.display = 'none'; };
                 preloader.src = altSrc;
                 return;
             }
@@ -3938,64 +4024,23 @@ window.handleGlowIconError = function (img) {
     img.style.display = 'none';
 };
 
-// ==================== 卡片 HTML 生成 ====================
 const buildCardInnerHTML = (item, adminHtml, style) => {
-
-    var fallbackAttr = 'onerror="window.handleIconError(this)"';
-
+    let fallbackAttr = 'onerror="window.handleIconError(this)"';
     const safeIcon = utils.escapeHTML(item.icon);
-
     const isImgIcon = item.icon && item.icon.startsWith('http');
-
-    const iconHtml = isImgIcon
-
-        ? `<img src="${safeIcon}" loading="lazy" ${fallbackAttr}>`
-
-        : `<span class="emoji-icon">${safeIcon || '\u{1F517}'}</span>`;
-
-
-
+    const iconHtml = isImgIcon ? `<img src="${safeIcon}" loading="lazy" ${fallbackAttr}>` : `<span class="emoji-icon">${safeIcon || '🔗'}</span>`;
     const safeUrl = utils.escapeHTML(item.url);
-
     const safeTitle = utils.escapeHTML(item.title);
+    let glowFallback = 'onerror="window.handleGlowIconError(this)"';
+    const glowBgHtml = isImgIcon ? `<div class="card-glow-bg"><img src="${safeIcon}" loading="lazy" aria-hidden="true" ${glowFallback}></div>` : `<div class="card-glow-bg"><div class="glow-emoji">${safeIcon || '🔗'}</div></div>`;
 
-
-
-    // 光晕背景层：用图标图片或 emoji 作为模糊扩散光源
-    var glowFallback = 'onerror="window.handleGlowIconError(this)"';
-
-    const glowBgHtml = isImgIcon
-
-        ? `<div class="card-glow-bg"><img src="${safeIcon}" loading="lazy" aria-hidden="true" ${glowFallback}></div>`
-
-        : `<div class="card-glow-bg"><div class="glow-emoji">${safeIcon || '\u{1F517}'}</div></div>`;
-
-
-
-    if (style === 2) {
-
-        return `${glowBgHtml}${adminHtml}<a href="${safeUrl}" target="_blank">
-
-            <div class="icon-wrapper">${iconHtml}</div>
-
-            <div class="card-text-block"><h3>${safeTitle}</h3></div>
-
-        </a>`;
-
-    } else {
-
-        return `${glowBgHtml}${adminHtml}<a href="${safeUrl}" target="_blank"><div class="icon-wrapper">${iconHtml}</div><h3>${safeTitle}</h3></a>`;
-
-    }
-
+    return style === 2 
+        ? `${glowBgHtml}${adminHtml}<a href="${safeUrl}" target="_blank"><div class="icon-wrapper">${iconHtml}</div><div class="card-text-block"><h3>${safeTitle}</h3></div></a>`
+        : `${glowBgHtml}${adminHtml}<a href="${safeUrl}" target="_blank"><div class="icon-wrapper">${iconHtml}</div><h3>${safeTitle}</h3></a>`;
 };
 
-
-
-// ==================== 批量选择功能 ====================
 const toggleCardSelection = (id) => {
-    if (selectedCardIds.has(id)) selectedCardIds.delete(id);
-    else selectedCardIds.add(id);
+    if (selectedCardIds.has(id)) selectedCardIds.delete(id); else selectedCardIds.add(id);
     updateBatchUI();
     renderNav();
 };
@@ -4006,12 +4051,7 @@ const updateBatchUI = () => {
         if (!batchBar) {
             batchBar = document.createElement('div');
             batchBar.className = 'batch-actions-bar';
-            batchBar.innerHTML = `
-                <span>已选 <b id="batch-count">0</b> 项</span>
-                <button class="batch-btn move" id="batch-move-btn">移动到分类</button>
-                <button class="batch-btn delete" id="batch-delete-btn">批量删除</button>
-                <button class="batch-btn" id="batch-cancel-btn" style="background:rgba(150,150,150,0.8); color:white;">取消</button>
-            `;
+            batchBar.innerHTML = `<span>已选 <b id="batch-count">0</b> 项</span><button class="batch-btn move" id="batch-move-btn">移动分类</button><button class="batch-btn delete" id="batch-delete-btn">批量删除</button><button class="batch-btn" id="batch-cancel-btn" style="background:#555;color:#fff">取消</button>`;
             document.body.appendChild(batchBar);
             document.getElementById('batch-delete-btn').addEventListener('click', batchDelete);
             document.getElementById('batch-move-btn').addEventListener('click', showBatchMoveDialog);
@@ -4019,232 +4059,125 @@ const updateBatchUI = () => {
         }
         batchBar.classList.add('visible');
         document.getElementById('batch-count').textContent = selectedCardIds.size;
-    } else {
-        if (batchBar) batchBar.classList.remove('visible');
-    }
+    } else if (batchBar) { batchBar.classList.remove('visible'); }
 };
 
-const clearSelection = () => {
-    selectedCardIds.clear();
-    updateBatchUI();
-    renderNav();
-};
-
+const clearSelection = () => { selectedCardIds.clear(); updateBatchUI(); renderNav(); };
 const batchDelete = () => {
-    if (selectedCardIds.size === 0) return;
-    if (!confirm(`确定删除选中的 ${selectedCardIds.size} 个网站？`)) return;
+    if (selectedCardIds.size === 0 || !confirm(`确定删除选中的 ${selectedCardIds.size} 个书签？`)) return;
     appData.items = appData.items.filter(item => !selectedCardIds.has(item.id));
-    clearSelection();
-    saveAll(false);
-    showToast('批量删除成功');
+    clearSelection(); saveAll(false); showToast('批量删除成功');
 };
 
 const showBatchMoveDialog = () => {
     if (selectedCardIds.size === 0) return;
-    const cats = appData.categories;
-    const catOptions = cats.map(c => `<option value="${c.id}">${utils.escapeHTML(c.icon)} ${utils.escapeHTML(c.name)}</option>`).join('');
+    const catOptions = appData.categories.map(c => `<option value="${c.id}">${utils.escapeHTML(c.name)}</option>`).join('');
     const dialog = document.createElement('div');
-    dialog.className = 'modal';
-    dialog.style.display = 'flex';
-    dialog.innerHTML = `
-        <div class="modal-content" style="text-align:center">
-            <h3 style="margin-bottom:15px;">移动到分类</h3>
-            <select id="batch-move-cat" style="width:100%; margin-bottom:15px;">${catOptions}</select>
-            <div style="display:flex; gap:10px;">
-                <button class="tab-btn active" id="batch-move-confirm" style="flex:1;">确认移动</button>
-                <button class="tab-btn" id="batch-move-cancel" style="flex:1; background:rgba(150,150,150,0.5);">取消</button>
-            </div>
-        </div>
-    `;
+    dialog.className = 'modal'; dialog.style.display = 'flex';
+    dialog.innerHTML = `<div class="modal-content" style="text-align:center"><h3>移动到分类</h3><select id="batch-move-cat" style="margin: 15px 0">${catOptions}</select><div style="display:flex;gap:10px"><button class="tab-btn active" id="batch-move-confirm" style="flex:1">确认</button><button class="tab-btn" id="batch-move-cancel" style="flex:1;background:#555">取消</button></div></div>`;
     document.body.appendChild(dialog);
     document.getElementById('batch-move-cancel').addEventListener('click', () => document.body.removeChild(dialog));
     document.getElementById('batch-move-confirm').addEventListener('click', () => {
         const targetCatId = document.getElementById('batch-move-cat').value;
         appData.items.forEach(item => { if (selectedCardIds.has(item.id)) item.catId = targetCatId; });
-        document.body.removeChild(dialog);
-        clearSelection();
-        saveAll(false);
-        showToast(`已移动到目标分类`);
+        document.body.removeChild(dialog); clearSelection(); saveAll(false); showToast(`成功转移分类`);
     });
 };
 
-// ==================== 渲染导航内容（连续滚动） ====================
+// ==================== 核心网格渲染函数 ====================
 const renderNav = () => {
     const sidebarNav = document.getElementById('sidebar-nav');
     const container = document.getElementById('grid-container');
-    sidebarNav.innerHTML = '';
-    container.innerHTML = '';
+    sidebarNav.innerHTML = ''; container.innerHTML = '';
 
     const clickData = JSON.parse(localStorage.getItem('nav_clicks') || '{}');
     const hasFrequent = Object.keys(clickData).length > 0;
-
     let cats = isAdmin ? [...appData.categories] : appData.categories.filter(c => !c.hidden);
 
-    // 常去虚拟分类
-    if (hasFrequent) {
-        cats.unshift({ id: 'VIRTUAL_FREQ', name: '常去网站', icon: '⭐', hidden: false });
-    }
-
+    if (hasFrequent) cats.unshift({ id: 'VIRTUAL_FREQ', name: '常去网站', icon: '⭐', hidden: false });
     if (cats.length > 0 && !activeCatId) activeCatId = cats[0].id;
-    if (!cats.find(c => c.id === activeCatId) && cats.length > 0) activeCatId = cats[0].id;
 
-    // 渲染侧边栏导航项
     cats.forEach((cat) => {
-        // 计算该分类下的可见项目数量
-        let catCount = 0;
-        if (cat.id === 'VIRTUAL_FREQ') {
-            const allAvailableItems = appData.items.filter(i => isAdmin || !i.hidden);
-            catCount = allAvailableItems.filter(i => clickData[i.id] > 0).slice(0, 12).length;
-        } else {
-            catCount = appData.items.filter(i => i.catId === cat.id && (isAdmin || !i.hidden)).length;
-        }
+        let catCount = cat.id === 'VIRTUAL_FREQ' ? appData.items.filter(i => clickData[i.id] > 0).slice(0, 12).length : appData.items.filter(i => i.catId === cat.id && (isAdmin || !i.hidden)).length;
         const item = document.createElement('div');
         item.className = 'sidebar-nav-item' + (activeCatId === cat.id ? ' active' : '') + (cat.hidden ? ' hidden-item' : '');
         item.setAttribute('data-cat-id', cat.id);
         item.innerHTML = `<span class="nav-icon">${utils.escapeHTML(cat.icon)}</span><span class="nav-label">${utils.escapeHTML(cat.name)}</span><span class="nav-count">${catCount}</span>`;
         item.addEventListener('click', () => {
-            activeCatId = cat.id;
-            renderNav();
-            // 滚动到对应分类区块
+            activeCatId = cat.id; renderNav();
             const section = document.getElementById('section-' + cat.id);
-            if (section) {
-                section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
+            if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
         sidebarNav.appendChild(item);
     });
 
-    // 连续滚动：渲染所有分类区块
     cats.forEach((cat) => {
         const section = document.createElement('div');
-        section.className = 'category-section';
-        section.id = 'section-' + cat.id;
-
-        // 分类标题
+        section.className = 'category-section'; section.id = 'section-' + cat.id;
         const title = document.createElement('div');
         title.className = 'category-section-title';
         title.innerHTML = `<span class="cat-icon">${utils.escapeHTML(cat.icon)}</span> ${utils.escapeHTML(cat.name)}`;
         section.appendChild(title);
 
-        // 判断是否为视频分类
         const catIsVideo = isVideoCategory(cat);
-
-        // 获取该分类下的项目
-        let catItems = [];
-        if (cat.id === 'VIRTUAL_FREQ') {
-            const allAvailableItems = appData.items.filter(i => isAdmin || !i.hidden);
-            catItems = allAvailableItems
-                .filter(i => clickData[i.id] > 0)
-                .sort((a, b) => (clickData[b.id] || 0) - (clickData[a.id] || 0))
-                .slice(0, 12);
-        } else {
-            catItems = appData.items.filter(i => i.catId === cat.id && (isAdmin || !i.hidden));
-        }
+        let catItems = cat.id === 'VIRTUAL_FREQ' ? appData.items.filter(i => (isAdmin || !i.hidden) && clickData[i.id] > 0).sort((a, b) => (clickData[b.id] || 0) - (clickData[a.id] || 0)).slice(0, 12) : appData.items.filter(i => i.catId === cat.id && (isAdmin || !i.hidden));
 
         if (catIsVideo) {
-            // 视频分类：使用视频卡片网格
             const videoGrid = document.createElement('div');
             videoGrid.className = 'video-grid';
-
-            catItems.forEach((item) => {
-                const videoInfo = detectVideoPlatform(item.url);
-                const videoCard = buildVideoCard(item, videoInfo);
-                videoGrid.appendChild(videoCard);
-            });
-
-            // 管理员模式：新增卡片
-            if (isAdmin && cat.id !== 'VIRTUAL_FREQ') {
-                const addCard = document.createElement('div');
-                addCard.className = 'video-card';
-                addCard.style.borderStyle = 'dashed';
-                addCard.style.display = 'flex';
-                addCard.style.alignItems = 'center';
-                addCard.style.justifyContent = 'center';
-                addCard.style.minHeight = '120px';
-                addCard.innerHTML = `<div style="text-align:center; color:rgba(255,255,255,0.5);"><i class="ri-add-line" style="font-size:32px;"></i><div style="font-size:12px; margin-top:4px;">新增</div></div>`;
-                addCard.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    openItemEdit('', cat.id);
-                });
-                videoGrid.appendChild(addCard);
-            }
-
-            section.appendChild(videoGrid);
-
-            // 异步加载 Bilibili 封面
-            loadVideoCovers(videoGrid);
-
-            // 视频分类拖拽排序
-            if (isAdmin && typeof Sortable !== 'undefined' && cat.id !== 'VIRTUAL_FREQ') {
-                new Sortable(videoGrid, {
-                    animation: 150,
-                    ghostClass: 'sortable-ghost',
-                    filter: '.card-add-new',
-                    onMove: (evt) => {
-                        // 不允许拖到"新增"卡片位置
-                        if (evt.related && evt.related.style && evt.related.style.borderStyle === 'dashed') return false;
-                    },
-                    onEnd: () => {
-                        const newIdOrder = Array.from(videoGrid.querySelectorAll('.video-card[data-id]')).map(el => el.getAttribute('data-id'));
-                        const currentCatItems = appData.items.filter(i => i.catId === cat.id);
-                        const sortedCurrentItems = newIdOrder.map(id => currentCatItems.find(i => i.id === id));
-                        let newGlobalItems = [];
-                        appData.categories.forEach(c => {
-                            if (c.id === cat.id) newGlobalItems.push(...sortedCurrentItems);
-                            else newGlobalItems.push(...appData.items.filter(i => i.catId === c.id));
-                        });
-                        appData.items = newGlobalItems;
-                        saveAll(true);
-                    }
-                });
-            }
-        } else {
-            // 普通网站分类：使用原有网格
-            const grid = document.createElement('div');
-            grid.className = 'nav-grid';
-            grid.id = 'grid-' + cat.id;
-
-            grid.addEventListener('click', (e) => {
+            
+            // 绑定视频区块的管理事件点击拦截
+            videoGrid.addEventListener('click', (e) => {
                 const actionBtn = e.target.closest('.action-mini');
                 if (actionBtn) {
-                    e.preventDefault();
-                    e.stopPropagation();
+                    e.preventDefault(); e.stopPropagation();
                     const action = actionBtn.getAttribute('data-action');
                     const targetId = actionBtn.getAttribute('data-id');
                     if (action === 'toggleHide') toggleHide('items', targetId);
                     if (action === 'edit') openItemEdit(targetId, null);
                     if (action === 'delete') deleteObj('items', targetId);
-                    return;
                 }
-                if (e.target.closest('.card-add-new')) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    openItemEdit('', cat.id);
+            });
+
+            catItems.forEach(item => { videoGrid.appendChild(buildVideoCard(item, detectVideoPlatform(item.url))); });
+
+            if (isAdmin && isEditMode && cat.id !== 'VIRTUAL_FREQ') {
+                const addCard = document.createElement('div');
+                addCard.className = 'video-card'; addCard.style.cssText = 'border-style:dashed;display:flex;align-items:center;justify-content:center;min-height:120px;cursor:pointer;';
+                addCard.innerHTML = `<div style="text-align:center;color:rgba(255,255,255,0.5);"><i class="ri-add-line" style="font-size:32px;"></i><div>新增</div></div>`;
+                addCard.addEventListener('click', () => openItemEdit('', cat.id));
+                videoGrid.appendChild(addCard);
+            }
+            section.appendChild(videoGrid);
+            loadVideoCovers(videoGrid);
+        } else {
+            const grid = document.createElement('div');
+            grid.className = 'nav-grid'; grid.id = 'grid-' + cat.id;
+            grid.addEventListener('click', (e) => {
+                const actionBtn = e.target.closest('.action-mini');
+                if (actionBtn) {
+                    e.preventDefault(); e.stopPropagation();
+                    const action = actionBtn.getAttribute('data-action');
+                    const targetId = actionBtn.getAttribute('data-id');
+                    if (action === 'toggleHide') toggleHide('items', targetId);
+                    if (action === 'edit') openItemEdit(targetId, null);
+                    if (action === 'delete') deleteObj('items', targetId);
+                } else if (e.target.closest('.batch-select-btn')) {
+                    e.preventDefault(); e.stopPropagation();
+                    toggleCardSelection(e.target.closest('.batch-select-btn').getAttribute('data-id'));
                 }
             });
 
             const fragment = document.createDocumentFragment();
-
             catItems.forEach((item) => {
                 const card = document.createElement('div');
                 card.className = 'card' + (item.hidden ? ' hidden-item' : '');
                 card.setAttribute('data-id', utils.escapeHTML(item.id));
-
-                // 检测是否有视频链接（非视频分类中的视频链接）
-                const videoInfo = detectVideoPlatform(item.url);
-
-                if (currentViewStyle === 2 && item.bgColor) {
-                    card.style.setProperty('--card-bg-color', item.bgColor);
-                    card.classList.add('has-bg');
-                }
-
-                const safeDesc = utils.escapeHTML(item.desc || '');
-                const safeTitle = utils.escapeHTML(item.title);
-                const tooltip = safeDesc ? `${safeTitle}\n${safeDesc}` : safeTitle;
-                card.setAttribute('data-tooltip', tooltip);
+                if (currentViewStyle === 2 && item.bgColor) { card.style.setProperty('--card-bg-color', item.bgColor); card.classList.add('has-bg'); }
+                card.setAttribute('data-tooltip', item.desc ? `${item.title}\n${item.desc}` : item.title);
 
                 let adminHtml = '';
-                if (isAdmin && cat.id !== 'VIRTUAL_FREQ') {
+                if (isAdmin && isEditMode && cat.id !== 'VIRTUAL_FREQ') {
                     adminHtml = `<div class="admin-actions">
                         <button class="action-mini batch-select-btn" data-id="${utils.escapeHTML(item.id)}"><i class="ri-checkbox-${selectedCardIds.has(item.id) ? 'fill' : 'blank-line'}"></i></button>
                         <button class="action-mini" data-action="toggleHide" data-id="${utils.escapeHTML(item.id)}"><i class="ri-eye-${item.hidden ? 'off-' : ''}line"></i></button>
@@ -4254,123 +4187,41 @@ const renderNav = () => {
                 }
 
                 card.innerHTML = buildCardInnerHTML(item, adminHtml, currentViewStyle);
-
-                // 如果检测到视频链接，点击卡片打开视频播放弹窗
+                const videoInfo = detectVideoPlatform(item.url);
                 if (videoInfo) {
-                    const linkEl = card.querySelector('a');
-                    if (linkEl) {
-                        linkEl.addEventListener('click', (e) => {
-                            if (e.target.closest('.admin-actions')) return;
-                            e.preventDefault();
-                            openVideoModal(item, videoInfo);
-                        });
-                    }
+                    card.querySelector('a')?.addEventListener('click', (e) => {
+                        if (!e.target.closest('.admin-actions')) { e.preventDefault(); openVideoModal(item, videoInfo); }
+                    });
                 }
-
-                if (selectedCardIds.has(item.id)) {
-                    card.classList.add('selected');
-                }
+                if (selectedCardIds.has(item.id)) card.classList.add('selected');
                 fragment.appendChild(card);
             });
 
-            // 新增卡片按钮
-            if (isAdmin && cat.id !== 'VIRTUAL_FREQ') {
+            if (isAdmin && isEditMode && cat.id !== 'VIRTUAL_FREQ') {
                 const addCard = document.createElement('div');
-                addCard.className = 'card card-add-new';
-                addCard.style.borderStyle = 'dashed';
-                if (currentViewStyle === 2) {
-                    addCard.innerHTML = `<a href="javascript:void(0)">
-                        <div class="icon-wrapper"><div class="emoji-icon">➕</div></div>
-                        <div class="card-text-block"><h3>新增</h3></div>
-                    </a>`;
-                } else {
-                    addCard.innerHTML = '<a href="javascript:void(0)"><div class="icon-wrapper"><div class="emoji-icon">➕</div></div><h3>新增</h3></a>';
-                }
+                addCard.className = 'card card-add-new'; addCard.style.borderStyle = 'dashed';
+                addCard.innerHTML = `<a href="javascript:void(0)"><div class="icon-wrapper"><div class="emoji-icon">➕</div></div><h3>新增</h3></a>`;
+                addCard.addEventListener('click', () => openItemEdit('', cat.id));
                 fragment.appendChild(addCard);
             }
-
             grid.appendChild(fragment);
             section.appendChild(grid);
-
-            // 批量选择事件
-            if (isAdmin && cat.id !== 'VIRTUAL_FREQ') {
-                grid.querySelectorAll('.batch-select-btn').forEach(btn => {
-                    btn.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        const id = btn.getAttribute('data-id');
-                        toggleCardSelection(id);
-                    });
-                });
-            }
-
-            // 拖拽排序
-            if (isAdmin && typeof Sortable !== 'undefined' && cat.id !== 'VIRTUAL_FREQ') {
-                new Sortable(grid, {
-                    animation: 150,
-                    ghostClass: 'sortable-ghost',
-                    filter: '.card-add-new',
-                    onMove: (evt) => { if (evt.related.classList.contains('card-add-new')) return false; },
-                    onEnd: () => {
-                        const newIdOrder = Array.from(grid.querySelectorAll('.card[data-id]')).map(el => el.getAttribute('data-id'));
-                        const currentCatItems = appData.items.filter(i => i.catId === cat.id);
-                        const sortedCurrentItems = newIdOrder.map(id => currentCatItems.find(i => i.id === id));
-                        let newGlobalItems = [];
-                        appData.categories.forEach(c => {
-                            if (c.id === cat.id) newGlobalItems.push(...sortedCurrentItems);
-                            else newGlobalItems.push(...appData.items.filter(i => i.catId === c.id));
-                        });
-                        appData.items = newGlobalItems;
-                        saveAll(true);
-                    }
-                });
-            }
         }
-
         container.appendChild(section);
     });
 
-    // 滚动监听：自动高亮当前可见分类
     initScrollSpy();
-    // 卡片光晕效果初始化
     initCardGlow(container);
 };
 
-// ==================== 视频卡片构建 ====================
 const buildVideoCard = (item, videoInfo) => {
     const card = document.createElement('div');
-    card.className = 'video-card';
-    card.setAttribute('data-id', utils.escapeHTML(item.id));
+    card.className = 'video-card'; card.setAttribute('data-id', utils.escapeHTML(item.id));
+    let badgeHtml = videoInfo ? `<div class="video-card-badge ${videoInfo.type === 'bilibili'?'bilibili':'youtube'}">${videoInfo.type === 'bilibili'?'Bilibili':'YouTube'}</div>` : '';
+    let coverHtml = videoInfo?.type === 'bilibili' ? `<div class="video-cover-slot" data-bvid="${videoInfo.bvid}"><div class="video-card-cover-fallback"><i class="ri-play-circle-line"></i></div></div>` : (videoInfo?.type === 'youtube' ? `<img src="https://img.youtube.com/vi/${videoInfo.videoId}/mqdefault.jpg" loading="lazy">` : `<div class="video-card-cover-fallback"><i class="ri-play-circle-line"></i></div>`);
 
-    const safeTitle = utils.escapeHTML(item.title);
-    const safeDesc = utils.escapeHTML(item.desc || '');
-    const safeUrl = utils.escapeHTML(item.url);
-
-    // 平台标识
-    let badgeHtml = '';
-    if (videoInfo) {
-        const badgeClass = videoInfo.type === 'bilibili' ? 'bilibili' : 'youtube';
-        const badgeText = videoInfo.type === 'bilibili' ? 'Bilibili' : 'YouTube';
-        badgeHtml = `<div class="video-card-badge ${badgeClass}">${badgeText}</div>`;
-    }
-
-    // 封面区域
-    let coverHtml = '';
-    if (videoInfo?.type === 'bilibili') {
-        // Bilibili：使用异步加载封面（需要 API 获取真实 URL）
-        coverHtml = `<div class="video-cover-slot" data-bvid="${videoInfo.bvid}">
-            <div class="video-card-cover-fallback"><i class="ri-play-circle-line"></i></div>
-        </div>`;
-    } else if (videoInfo?.type === 'youtube') {
-        coverHtml = `<img src="https://img.youtube.com/vi/${videoInfo.videoId}/mqdefault.jpg" alt="${safeTitle}" loading="lazy"
-            onerror="this.style.display='none';">`;
-    } else {
-        coverHtml = `<div class="video-card-cover-fallback"><i class="ri-play-circle-line"></i></div>`;
-    }
-
-    // 管理员操作
     let adminHtml = '';
-    if (isAdmin) {
+    if (isAdmin && isEditMode) {
         adminHtml = `<div class="admin-actions">
             <button class="action-mini" data-action="toggleHide" data-id="${utils.escapeHTML(item.id)}"><i class="ri-eye-${item.hidden ? 'off-' : ''}line"></i></button>
             <button class="action-mini" data-action="edit" data-id="${utils.escapeHTML(item.id)}"><i class="ri-edit-line"></i></button>
@@ -4378,221 +4229,139 @@ const buildVideoCard = (item, videoInfo) => {
         </div>`;
     }
 
-    card.innerHTML = `
-        ${adminHtml}
-        <div class="video-card-cover">
-            ${badgeHtml}
-            ${coverHtml}
-            <div class="video-play-overlay">
-                <div class="video-play-btn"><i class="ri-play-fill"></i></div>
-            </div>
-        </div>
-        <div class="video-card-body">
-            <div class="video-card-title">${safeTitle}</div>
-            <div class="video-card-desc">${safeDesc || (videoInfo ? (videoInfo.type === 'bilibili' ? 'Bilibili' : 'YouTube') : '')}</div>
-        </div>
-    `;
+    card.innerHTML = `${adminHtml}<div class="video-card-cover">${badgeHtml}${coverHtml}<div class="video-play-overlay"><div class="video-play-btn"><i class="ri-play-fill"></i></div></div></div><div class="video-card-body"><div class="video-card-title">${utils.escapeHTML(item.title)}</div><div class="video-card-desc">${utils.escapeHTML(item.desc || '')}</div></div>`;
 
-    // 点击播放视频
     card.addEventListener('click', (e) => {
-        if (e.target.closest('.admin-actions')) {
-            // 管理操作
-            const actionBtn = e.target.closest('.action-mini');
-            if (actionBtn) {
-                e.preventDefault();
-                e.stopPropagation();
-                const action = actionBtn.getAttribute('data-action');
-                const targetId = actionBtn.getAttribute('data-id');
-                if (action === 'toggleHide') toggleHide('items', targetId);
-                if (action === 'edit') openItemEdit(targetId, null);
-                if (action === 'delete') deleteObj('items', targetId);
-            }
-            return;
-        }
-        if (videoInfo) {
-            e.preventDefault();
-            openVideoModal(item, videoInfo);
-        } else if (item.url) {
-            window.open(item.url, '_blank');
-        }
+        if (e.target.closest('.admin-actions')) return;
+        if (videoInfo) { e.preventDefault(); openVideoModal(item, videoInfo); } else if (item.url) { window.open(item.url, '_blank'); }
     });
 
-    if (item.hidden) {
-        card.style.opacity = '0.3';
-        card.style.filter = 'grayscale(1)';
-    }
-
+    if (item.hidden) { card.style.opacity = '0.3'; card.style.filter = 'grayscale(1)'; }
     return card;
 };
 
-// ==================== 卡片悬停光晕效果 ====================
 const initCardGlow = (container) => {
     const cards = container.querySelectorAll('.card[data-id]');
     const extractor = window.colorExtractor;
     if (!extractor) return;
 
-    // 用队列控制并发数，避免同时发起大量请求导致雪崩
-    var queue = [];
-    var activeCount = 0;
-    var MAX_CONCURRENT = 6;
+    let queue = [];
+    let activeCount = 0;
+    const MAX_CONCURRENT = 6;
 
-    var processQueue = function () {
+    const processQueue = () => {
         if (activeCount >= MAX_CONCURRENT || queue.length === 0) return;
         activeCount++;
-        var task = queue.shift();
-        task().then(function () {
-            activeCount--;
-            processQueue();
-        }).catch(function () {
-            activeCount--;
-            processQueue();
-        });
-        // 尝试继续填充并发槽
-        if (activeCount < MAX_CONCURRENT && queue.length > 0) {
-            processQueue();
-        }
+        let task = queue.shift();
+        task().finally(() => { activeCount--; processQueue(); });
     };
 
-    cards.forEach(function (card) {
-        var item = appData.items.find(function (i) { return i.id === card.getAttribute('data-id'); });
+    cards.forEach(card => {
+        let item = appData.items.find(i => i.id === card.getAttribute('data-id'));
         if (!item) return;
-
-        var iconSrc = item.icon;
-        var isImgIcon = iconSrc && iconSrc.startsWith('http');
-        var title = item.title || '';
-
-        // 记录已尝试的 URL，防止在两个图标源之间无限递归
-        var triedUrls = new Set();
-
-        /**
-         * 最终兜底：使用文本生成颜色
-         */
-        var fallbackToTextColor = function () {
-            var fc = extractor.generateColorFromText(title);
-            if (fc) {
-                card.style.setProperty('--icon-color', fc.hex);
-                card.style.setProperty('--icon-color-rgb', fc.rgb);
-                card.setAttribute('data-color-ready', '');
-            }
-        };
-
-        /**
-         * 尝试从图片提取颜色，失败时尝试备用源或降级到文本色
-         * @param {string} src - 要提取颜色的图片 URL
-         * @param {boolean} allowRetry - 是否允许尝试备用图标源
-         * @returns {Promise}
-         */
-        var tryExtractColor = function (src, allowRetry) {
-            // 已经尝试过这个 URL，直接回退到文本色
-            if (triedUrls.has(src)) {
-                fallbackToTextColor();
-                return Promise.resolve();
-            }
-            triedUrls.add(src);
-
-            return extractor.extractColorFromImage(src).then(function (color) {
+        if (item.icon && item.icon.startsWith('http')) {
+            queue.push(() => extractor.extractColorFromImage(item.icon).then(color => {
                 if (color) {
                     card.style.setProperty('--icon-color', color.hex);
                     card.style.setProperty('--icon-color-rgb', color.rgb);
                     card.setAttribute('data-color-ready', '');
-                } else if (allowRetry) {
-                    // 颜色提取无结果，尝试备用图标源
-                    var altSrc = item.url ? getAltFaviconUrl(src, item.url) : null;
-                    if (altSrc && altSrc !== src && !triedUrls.has(altSrc)) {
-                        return tryExtractColor(altSrc, true);
-                    } else {
-                        fallbackToTextColor();
-                    }
-                } else {
-                    fallbackToTextColor();
                 }
-            }).catch(function () {
-                // CORS 或其他错误：尝试备用图标源
-                var altSrc = item.url ? getAltFaviconUrl(src, item.url) : null;
-                if (altSrc && altSrc !== src && !triedUrls.has(altSrc)) {
-                    return tryExtractColor(altSrc, true);
-                } else {
-                    fallbackToTextColor();
-                }
-            });
-        };
-
-        if (isImgIcon) {
-            // 加入队列，控制并发
-            queue.push(function () {
-                return tryExtractColor(iconSrc, true);
-            });
+            }));
         } else {
-            // Emoji 或无图标：从文本生成颜色
-            var color = extractor.generateColorFromText(iconSrc || title);
-            if (color) {
-                card.style.setProperty('--icon-color', color.hex);
-                card.style.setProperty('--icon-color-rgb', color.rgb);
-                card.setAttribute('data-color-ready', '');
-            }
+            let color = extractor.generateColorFromText(item.icon || item.title);
+            card.style.setProperty('--icon-color', color.hex);
+            card.style.setProperty('--icon-color-rgb', color.rgb);
+            card.setAttribute('data-color-ready', '');
         }
-
-        // 鼠标跟踪（RAF 节流）
-        var rafId = null;
-        card.addEventListener('mousemove', function (e) {
-            if (rafId) return;
-            rafId = requestAnimationFrame(function () {
-                var rect = card.getBoundingClientRect();
-                var x = (e.clientX - rect.left) / rect.width;
-                var y = (e.clientY - rect.top) / rect.height;
-                card.style.setProperty('--pointer-x', x.toFixed(3));
-                card.style.setProperty('--pointer-y', y.toFixed(3));
-                rafId = null;
-            });
-        });
-
-        card.addEventListener('mouseleave', function () {
-            if (rafId) {
-                cancelAnimationFrame(rafId);
-                rafId = null;
-            }
-            card.style.setProperty('--pointer-x', '0.5');
-            card.style.setProperty('--pointer-y', '0.5');
-        });
     });
 
-    // 启动队列处理
-    processQueue();
+    for (let i = 0; i < MAX_CONCURRENT; i++) processQueue();
 };
 
-// ==================== 滚动监听（自动高亮侧边栏） ====================
-let scrollSpyInitialized = false;
 const initScrollSpy = () => {
-    // 使用 IntersectionObserver 替代 scroll 监听以提升性能
     const sections = document.querySelectorAll('.category-section');
     if (sections.length === 0) return;
-
-    // 清理旧的 observer
-    if (window._scrollSpyObserver) {
-        window._scrollSpyObserver.disconnect();
-    }
+    if (window._scrollSpyObserver) window._scrollSpyObserver.disconnect();
 
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
                 const catId = entry.target.id.replace('section-', '');
                 activeCatId = catId;
-                // 更新侧边栏高亮
                 document.querySelectorAll('.sidebar-nav-item').forEach(item => {
                     item.classList.toggle('active', item.getAttribute('data-cat-id') === catId);
                 });
             }
         });
-    }, {
-        rootMargin: '-20% 0px -60% 0px',
-        threshold: 0
-    });
-
-    sections.forEach(section => observer.observe(section));
+    }, { rootMargin: '-20% 0px -60% 0px' });
+    sections.forEach(s => observer.observe(s));
     window._scrollSpyObserver = observer;
 };
 
-// ==================== 编辑相关函数 ====================
+// ==================== 智能增量解析 Edge 收藏夹 ====================
+const importConfig = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        const content = e.target.result;
+        let parsedData = null;
+
+        if (content.includes("NETSCAPE-Bookmark-file-1") || content.includes("<TITLE>Bookmarks</TITLE>")) {
+            showLoader('正在为您智能增量解析 Edge 文件夹...');
+            parsedData = parseEdgeHtmlBookmarks(content);
+        } else {
+            try { parsedData = JSON.parse(content); } catch (err) {
+                hideLoader(); showToast("格式不正确", "#e74c3c"); return;
+            }
+        }
+
+        if (parsedData && parsedData.categories && parsedData.items) {
+            parsedData.categories.forEach(inCat => {
+                if (!appData.categories.some(c => c.id === inCat.id || c.name === inCat.name)) appData.categories.push(inCat);
+            });
+            parsedData.items.forEach(inItem => {
+                if (!appData.items.some(i => i.url === inItem.url)) appData.items.push(inItem);
+            });
+
+            renderTools(); renderNav();
+            await saveAll(false);
+            showToast("已成功智能增量导入！");
+        }
+    };
+    reader.readAsText(file, "UTF-8");
+    event.target.value = '';
+};
+
+function parseEdgeHtmlBookmarks(htmlStr) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlStr, 'text/html');
+    const categories = []; const items = [];
+    const generateCatId = (idx) => 'CAT_' + (Date.now() + idx);
+    const generateItemId = (catId, idx) => 'ITEM_' + (Date.now() + idx);
+    const folderHeaders = doc.querySelectorAll('dt > h3');
+    let catIndex = 0;
+
+    folderHeaders.forEach((h3) => {
+        const name = h3.textContent.trim();
+        if (['收藏夹栏', 'Bookmarks', '书签栏'].includes(name)) return;
+        const catId = generateCatId(catIndex);
+        categories.push({ id: catId, name, icon: name.includes('视频')?'🎬':'📁', hidden: false, _isVideo: name.includes('视频') });
+
+        const nextDl = h3.parentElement.querySelector('dl');
+        if (nextDl) {
+            nextDl.querySelectorAll('a').forEach((a, itemIndex) => {
+                const title = a.textContent.trim(); const url = a.getAttribute('href');
+                items.push({ id: generateItemId(catId, itemIndex), catId, title, url, desc: title, icon: "https://favicon.im/" + new URL(url).hostname, hidden: false });
+            });
+        }
+        catIndex++;
+    });
+    return { categories, items };
+}
+
+// ==================== 新增/编辑网站弹窗渲染 ====================
 const debouncedHandleUrlInput = utils.debounce((val) => handleUrlInput(val), 500);
 
 const openItemEdit = (id, catId) => {
@@ -4609,66 +4378,44 @@ const openItemEdit = (id, catId) => {
     const safeDesc = utils.escapeHTML(item.desc || '');
     const safeBgColor = utils.escapeHTML(item.bgColor || '');
 
-    // 检测当前是否为视频分类
     const currentCat = appData.categories.find(c => c.id === (item.catId || catId));
     const isVideoCat = currentCat && isVideoCategory(currentCat);
     const videoInfo = detectVideoPlatform(item.url);
 
     document.getElementById('edit-title').innerText = id ? '编辑网站' : '新增网站';
+    
+    // 【修改绑定】：移除原本重名的 btn-confirm-edit 监听错乱，确保由独立的 confirmEdit 函数执行
     document.getElementById('edit-form-body').innerHTML = `
         <div class="form-row"><label>网站 URL</label><input id="f-url" value="${safeUrl}"></div>
         ${isVideoCat || videoInfo ? `<div style="background:rgba(57,157,255,0.1); border:1px solid rgba(57,157,255,0.3); border-radius:8px; padding:8px 12px; margin-bottom:8px; font-size:12px; color:rgba(255,255,255,0.8);">
-            <i class="ri-film-line"></i> 视频链接已自动识别${videoInfo ? '（' + (videoInfo.type === 'bilibili' ? 'Bilibili' : 'YouTube') + '）' : ''}，点击卡片将直接播放
+            <i class="ri-film-line"></i> 视频链接已自动识别，点击卡片将直接激活弹出播放器
         </div>` : ''}
         <div class="form-row"><label>网站名称</label><input id="f-title" value="${safeTitle}"></div>
-        <div class="form-row"><label>网站说明</label><input id="f-desc" value="${safeDesc}" placeholder="选填，鼠标悬停时显示"></div>
+        <div class="form-row"><label>网站说明</label><input id="f-desc" value="${safeDesc}" placeholder="鼠标悬停时显示描述"></div>
         <div class="form-row"><label>当前图标</label>
             <div style="display:flex; width:100%; align-items:center;">
-                <input id="f-icon" value="${safeIcon}" placeholder="可手动填入，或选择下方智能接口">
+                <input id="f-icon" value="${safeIcon}" placeholder="图标 URL 或单个 Emoji">
                 <div id="preview-box" class="preview-container"></div>
             </div>
         </div>
-        <div class="form-row"><label style="font-size:12px; font-weight:normal; color:#999;">Favicon.im</label>
+        <div class="form-row"><label style="font-size:12px;color:#999;">Favicon.im</label>
             <div style="display:flex; align-items:center; width:100%;">
-                <input type="radio" name="icon_sel" id="opt-fav1" style="width:18px; height:18px; flex-shrink:0; margin:0 6px 0 0; cursor:pointer;">
-                <input id="txt-fav1" readonly placeholder="等待填写 URL 自动解析..." style="flex:1; min-width:0; color:#aaa; font-size:13px; cursor:pointer; background:rgba(0,0,0,0.3);">
-                <div class="preview-container" style="background:rgba(0,0,0,0.3);"><img id="img-fav1" src="" loading="lazy"></div>
+                <input type="radio" name="icon_sel" id="opt-fav1" style="width:18px; height:18px; cursor:pointer; margin-right:6px;">
+                <input id="txt-fav1" readonly placeholder="自动解析中..." style="flex:1; color:#aaa; font-size:13px; cursor:pointer;">
+                <div class="preview-container"><img id="img-fav1" src=""></div>
             </div>
         </div>
-        <div class="form-row"><label style="font-size:12px; font-weight:normal; color:#999;">DuckDuckGo</label>
+        <div class="form-row"><label style="font-size:12px;color:#999;">DuckDuckGo</label>
             <div style="display:flex; align-items:center; width:100%;">
-                <input type="radio" name="icon_sel" id="opt-fav2" style="width:18px; height:18px; flex-shrink:0; margin:0 6px 0 0; cursor:pointer;">
-                <input id="txt-fav2" readonly placeholder="等待填写 URL 自动解析..." style="flex:1; min-width:0; color:#aaa; font-size:13px; cursor:pointer; background:rgba(0,0,0,0.3);">
-                <div class="preview-container" style="background:rgba(0,0,0,0.3);"><img id="img-fav2" src="" loading="lazy"></div>
+                <input type="radio" name="icon_sel" id="opt-fav2" style="width:18px; height:18px; cursor:pointer; margin-right:6px;">
+                <input id="txt-fav2" readonly placeholder="自动解析中..." style="flex:1; color:#aaa; font-size:13px; cursor:pointer;">
+                <div class="preview-container"><img id="img-fav2" src=""></div>
             </div>
         </div>
-        <div class="form-row"><label style="font-size:12px; font-weight:normal; color:#999;">图标搜索</label>
-            <div style="display:flex; flex-direction:column; width:100%; gap:5px;">
-                <div style="display:flex; gap:5px;">
-                    <input id="iconify-search" placeholder="输入英文关键词, 如 github" style="flex:1;">
-                    <button type="button" class="manage-cat-btn" id="btn-iconify-search" style="border: 1px solid var(--primary); color: white; background: var(--primary);">搜索</button>
-                </div>
-                <div id="iconify-results" style="display:flex; flex-wrap:wrap; gap:5px; max-height:80px; overflow-y:auto; margin-top:5px;"></div>
-            </div>
-        </div>
-        <div class="form-row" style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px; margin-bottom: 10px;">
-            <label style="font-size:12px; font-weight:normal; color:#999;">智能 Emoji</label>
-            <div style="display:flex; flex-direction:column; width:100%; gap:5px;">
-                <div style="display:flex; gap:5px; align-items:center;">
-                    <input id="emoji-recommend-title" value="${safeTitle}" placeholder="输入网站名称获取推荐" style="flex:1;">
-                    <button type="button" class="manage-cat-btn" id="btn-emoji-recommend" style="border: 1px solid var(--primary); color: white; background: var(--primary);">推荐</button>
-                    <button type="button" class="manage-cat-btn" id="btn-emoji-refresh" title="换一组" style="padding:8px 12px;">🔄</button>
-                </div>
-                <div id="emoji-results" style="display:flex; flex-wrap:wrap; gap:5px; max-height:60px; overflow-y:auto; margin-top:5px;">
-                    ${safeIcon && !safeIcon.startsWith('http') ? `<span class="emoji-suggestion selected" data-emoji="${safeIcon}">${safeIcon}</span>` : ''}
-                </div>
-            </div>
-        </div>
-        <div class="form-row" style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px; margin-bottom: 10px;">
-            <label style="font-size:12px;">网格背景色</label>
+        <div class="form-row"><label style="font-size:12px;color:#999;">网格背景色</label>
             <div style="display:flex; align-items:center; gap:8px; width:100%;">
-                <input type="color" id="f-bg-color" value="${safeBgColor || '#399dff'}" style="width:40px; height:36px; padding:2px; border:none; border-radius:6px; cursor:pointer; background:transparent; flex-shrink:0;">
-                <input id="f-bg-color-text" value="${safeBgColor}" placeholder="如 rgba(57,157,255,0.45) 或 #3b82f6，留空使用默认" style="flex:1;">
+                <input type="color" id="f-bg-color" value="${safeBgColor || '#399dff'}" style="width:40px; height:36px; cursor:pointer; background:transparent;">
+                <input id="f-bg-color-text" value="${safeBgColor}" placeholder="缤纷模式特定背景色，留空使用默认">
             </div>
         </div>
         <div class="form-row"><label>归属分类</label>
@@ -4676,7 +4423,6 @@ const openItemEdit = (id, catId) => {
         </div>
     `;
 
-    // 背景色取色器与输入框联动
     const colorInput = document.getElementById('f-bg-color');
     const colorText = document.getElementById('f-bg-color-text');
     colorInput.addEventListener('input', () => { colorText.value = colorInput.value; });
@@ -4694,115 +4440,14 @@ const openItemEdit = (id, catId) => {
         txt.addEventListener('click', () => { if (txt.value) { opt.checked = true; selectIcon(txt.value); } });
     });
 
-    document.getElementById('btn-iconify-search').addEventListener('click', async () => {
-        const query = document.getElementById('iconify-search').value.trim();
-        if (!query) return;
-        const resBox = document.getElementById('iconify-results');
-        resBox.innerHTML = '<span style="font-size:12px;">搜索中...</span>';
-        try {
-            const req = await fetch(`https://api.iconify.design/search?query=${query}&limit=12`);
-            const data = await req.json();
-            resBox.innerHTML = '';
-            if (data.icons && data.icons.length > 0) {
-                data.icons.forEach(iconName => {
-                    const imgUrl = `https://api.iconify.design/${iconName}.svg`;
-                    const img = document.createElement('img');
-                    img.src = imgUrl;
-                    img.style.cssText = 'width:30px; height:30px; cursor:pointer; background:rgba(255,255,255,0.1); border-radius:6px; padding:4px; transition: 0.2s;';
-                    img.onmouseover = () => img.style.background = 'rgba(255,255,255,0.3)';
-                    img.onmouseout = () => img.style.background = 'rgba(255,255,255,0.1)';
-                    img.onclick = () => selectIcon(imgUrl);
-                    resBox.appendChild(img);
-                });
-            } else {
-                resBox.innerHTML = '<span style="font-size:12px; color:#aaa;">未找到结果</span>';
-            }
-        } catch (e) {
-            resBox.innerHTML = '<span style="font-size:12px; color:#e74c3c;">网络或接口错误</span>';
-        }
-    });
-
-    const EMOJI_KEYWORDS = {
-        'github': '🐙', 'git': '📦', 'code': '💻', '编程': '💻', '开发': '🛠️',
-        'google': '🔍', 'search': '🔍', '搜索': '🔍',
-        'youtube': '📺', 'video': '🎬', '视频': '🎬', 'music': '🎵', '音乐': '🎵',
-        'twitter': '🐦', 'facebook': '👥', 'social': '🌐', '社交': '🌐',
-        'mail': '📧', 'email': '📧', '邮箱': '📧', 'message': '💬', '消息': '💬',
-        'shop': '🛒', 'store': '🏪', '购物': '🛒', 'buy': '🛍️',
-        'game': '🎮', 'games': '🎲', '游戏': '🎮', 'play': '▶️',
-        'book': '📚', 'read': '📖', 'learn': '📝', '学习': '📚', '教育': '🎓',
-        'news': '📰', 'newspaper': '📰', '新闻': '📰', 'blog': '📝',
-        'weather': '🌤️', '天气': '🌤️',
-        'photo': '📷', 'image': '🖼️', '图片': '🖼️', 'camera': '📸',
-        'food': '🍔', 'restaurant': '🍽️', '美食': '🍜', 'eat': '🍕',
-        'travel': '✈️', 'trip': '🧳', '旅行': '🧳', 'map': '🗺️',
-        'money': '💰', 'finance': '💵', 'pay': '💳', '支付': '💳', 'bank': '🏦',
-        'cloud': '☁️', 'cloudflare': '☁️', 'aws': '☁️', 'server': '🖥️',
-        'chat': '💬', 'talk': '🗣️', 'ai': '🤖', 'bot': '🤖',
-        'home': '🏠', '生活': '🏠',
-        'work': '💼', 'office': '🏢', 'business': '💼', '工作': '💼',
-        'health': '🏥', 'medical': '🏥', '医院': '🏥', 'doctor': '👨‍⚕️',
-        'sport': '⚽', 'sports': '🏃', '运动': '⚽', 'fitness': '💪',
-        'star': '⭐', 'favorite': '⭐', '收藏': '⭐', 'bookmark': '🔖',
-        'setting': '⚙️', 'config': '🔧', '设置': '⚙️', 'tool': '🛠️',
-        'download': '⬇️', 'upload': '⬆️', 'file': '📁', 'folder': '📁',
-        'link': '🔗', 'connect': '🔗', 'chain': '🔗', '链接': '🔗',
-        'lock': '🔒', 'security': '🔐', 'secure': '🔒', '安全': '🔐',
-        'design': '🎨', 'art': '🎨', 'creative': '🎨', '设计': '🎨',
-        'api': '🔌', 'data': '📊', 'database': '🗄️', '数据': '📊',
-        'terminal': '💻', 'console': '⌨️', 'ssh': '🔐', '命令': '⌨️',
-        'wifi': '📶', 'network': '🌐', 'internet': '🌐', 'web': '🌐',
-        'notification': '🔔', 'bell': '🔔', 'alert': '⚠️', '通知': '🔔',
-        'fire': '🔥', 'hot': '🔥', 'trending': '📈', '热门': '🔥',
-        'bilibili': '📺', 'b站': '📺', '哔哩哔哩': '📺'
-    };
-
-    const getRecommendedEmojis = (title) => {
-        const results = new Set();
-        const lowerTitle = title.toLowerCase();
-        for (const [keyword, emoji] of Object.entries(EMOJI_KEYWORDS)) {
-            if (lowerTitle.includes(keyword)) results.add(emoji);
-        }
-        if (results.size === 0) {
-            return window.emojiPool ? window.emojiPool.getRandomEmojis(8) : ['🌐', '🔗', '📌', '⭐', '💡', '✨', '🎯', '🚀'];
-        }
-        const extras = window.emojiPool ? window.emojiPool.getRandomEmojis(4) : ['🌟', '💫', '✨', '🔮'];
-        return [...results, ...extras].slice(0, 8);
-    };
-
-    const renderEmojiSuggestions = (emojis) => {
-        const container = document.getElementById('emoji-results');
-        if (!container) return;
-        container.innerHTML = '';
-        emojis.forEach(emoji => {
-            const span = document.createElement('span');
-            span.className = 'emoji-suggestion';
-            span.textContent = emoji;
-            span.dataset.emoji = emoji;
-            span.onclick = () => {
-                document.querySelectorAll('.emoji-suggestion').forEach(el => el.classList.remove('selected'));
-                span.classList.add('selected');
-                selectIcon(emoji);
-            };
-            container.appendChild(span);
-        });
-    };
-
-    const recommendEmojis = () => {
-        const title = document.getElementById('emoji-recommend-title').value;
-        renderEmojiSuggestions(getRecommendedEmojis(title || safeTitle));
-    };
-
-    document.getElementById('btn-emoji-recommend').addEventListener('click', recommendEmojis);
-    document.getElementById('btn-emoji-refresh').addEventListener('click', () => {
-        renderEmojiSuggestions(getRecommendedEmojis(document.getElementById('emoji-recommend-title').value || safeTitle));
-    });
-    document.getElementById('emoji-recommend-title').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') recommendEmojis();
-    });
-
     updatePreview(item.icon);
     if (item.url) handleUrlInput(item.url, false);
+    
+    // 【核心修复】：显式重绑提交动作到全局统一的保存动作
+    const globalConfirmBtn = document.getElementById('btn-confirm-edit');
+    globalConfirmBtn.onclick = null; 
+    globalConfirmBtn.onclick = confirmEdit; 
+
     document.getElementById('edit-modal').style.display = 'flex';
 };
 
@@ -4826,427 +4471,197 @@ const handleUrlInput = (url, autoSelect = true) => {
             if (autoSelect && !currentIconVal) {
                 document.getElementById('opt-fav1').checked = true;
                 selectIcon(icon1);
-            } else if (currentIconVal === icon1) {
-                document.getElementById('opt-fav1').checked = true;
-            } else if (currentIconVal === icon2) {
-                document.getElementById('opt-fav2').checked = true;
-            } else {
-                document.getElementById('opt-fav1').checked = false;
-                document.getElementById('opt-fav2').checked = false;
             }
         } catch (e) { }
-    } else {
-        document.getElementById('txt-fav1').value = "";
-        document.getElementById('img-fav1').src = "";
-        document.getElementById('opt-fav1').checked = false;
-        document.getElementById('txt-fav2').value = "";
-        document.getElementById('img-fav2').src = "";
-        document.getElementById('opt-fav2').checked = false;
     }
 };
 
 const updatePreview = (val) => {
     const box = document.getElementById('preview-box');
+    if (!box) return;
     if (!val) { box.innerHTML = '🔗'; return; }
-    const safeVal = utils.escapeHTML(val);
-    if (safeVal.startsWith('http')) {
-        let fallbackAttr = `onerror="this.outerHTML='<span class=\\'emoji-icon\\'>'+window.utils.getRandomEmoji()+'</span>';"`;
-        box.innerHTML = `<img src="${safeVal}" loading="lazy" ${fallbackAttr}>`;
+    if (val.startsWith('http')) {
+        box.innerHTML = `<img src="${utils.escapeHTML(val)}" onerror="this.outerHTML='<span class=\\'emoji-icon\\'>🌐</span>';">`;
     } else {
-        box.innerHTML = `<span class="emoji-icon">${safeVal}</span>`;
+        box.innerHTML = `<span class="emoji-icon">${utils.escapeHTML(val)}</span>`;
     }
 };
 
-// ==================== 分类管理 ====================
+const confirmEdit = () => {
+    if (editingType === 'cats') {
+        // 如果是在偏好设置分类下，拦截跳转
+        confirmCatSettingsEdit();
+        return;
+    }
+
+    const url = document.getElementById('f-url').value.trim();
+    const title = document.getElementById('f-title').value.trim();
+    const desc = document.getElementById('f-desc').value.trim();
+    const icon = document.getElementById('f-icon').value.trim();
+    const catId = document.getElementById('f-cat').value;
+    const bgColor = document.getElementById('f-bg-color-text') ? document.getElementById('f-bg-color-text').value.trim() : '';
+
+    if (!url || !title) {
+        showToast('链接和名称不能为空', '#e67e22');
+        return;
+    }
+
+    if (editingId) {
+        const idx = appData.items.findIndex(i => i.id === editingId);
+        if (idx > -1) appData.items[idx] = { ...appData.items[idx], url, title, desc, icon, bgColor, catId };
+    } else {
+        appData.items.push({ id: 'i' + Date.now(), url, title, desc, icon, bgColor, catId, hidden: false });
+    }
+    
+    closeModal();
+    renderNav();
+    saveAll(false); // 触发向 Cloudflare 后端进行增量智能合并保存
+};
+
+// ==================== 偏好与分类拖拽管理 ====================
 const manageCats = () => {
     editingType = 'cats';
     document.getElementById('edit-title').innerText = '偏好与分类设置';
 
-    const currentBg = (appData.settings && appData.settings.bgUrl) ? appData.settings.bgUrl : '';
+    const currentBg = appData.settings?.bgUrl || '';
     const bgIsColor = /^#[0-9a-fA-F]{6}$/.test(currentBg);
-
-    const themeOptions = [
-        { value: 'auto', label: '跟随系统' },
-        { value: 'light', label: '亮色模式' },
-        { value: 'dark', label: '暗色模式' }
-    ].map(opt => `<option value="${opt.value}" ${themeMode === opt.value ? 'selected' : ''}>${opt.label}</option>`).join('');
-
-    const currentSiteName = (appData.settings && appData.settings.siteName) ? appData.settings.siteName : '个人导航';
-    const currentSiteIcon = (appData.settings && appData.settings.siteIcon) ? appData.settings.siteIcon : '🌐';
-
-    const currentDefaultHeight = (appData.settings && appData.settings.cardHeightDefault) ? appData.settings.cardHeightDefault : 85;
-    const currentColorfulHeight = (appData.settings && appData.settings.cardHeightColorful) ? appData.settings.cardHeightColorful : 85;
-    const currentIconSizeDefault = (appData.settings && appData.settings.iconSizeDefault) ? appData.settings.iconSizeDefault : 32;
-    const currentIconSizeColorful = (appData.settings && appData.settings.iconSizeColorful) ? appData.settings.iconSizeColorful : 32;
+    const currentSiteName = appData.settings?.siteName || '个人导航';
+    const currentSiteIcon = appData.settings?.siteIcon || '🌐';
 
     document.getElementById('edit-form-body').innerHTML = `
-        <div class="form-row" style="margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
-            <label>站点图标</label><input type="text" id="setting-site-icon" value="${utils.escapeHTML(currentSiteIcon)}" placeholder="🌐 输入 emoji 或图标 URL" style="flex:1; padding:5px">
-        </div>
-        <div class="form-row" style="margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
-            <label>站点名称</label><input type="text" id="setting-site-name" value="${utils.escapeHTML(currentSiteName)}" placeholder="个人导航" style="flex:1; padding:5px">
-        </div>
-        <div class="form-row" style="margin-bottom: 10px;">
-            <label>默认高度</label><input type="number" id="setting-height-default" value="${currentDefaultHeight}"><span style="color:#666; margin-left:10px;">px</span>
-        </div>
-        <div class="form-row" style="margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
-            <label>默认图标</label><input type="number" id="setting-icon-size-default" value="${currentIconSizeDefault}" min="16" max="128"><span style="color:#666; margin-left:10px;">px</span>
-        </div>
-        <div class="form-row" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 10px;">
-            <label>缤纷高度</label><input type="number" id="setting-height-colorful" value="${currentColorfulHeight}"><span style="color:#666; margin-left:10px;">px</span>
-        </div>
-        <div class="form-row" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 10px;">
-            <label>缤纷图标</label><input type="number" id="setting-icon-size-colorful" value="${currentIconSizeColorful}" min="16" max="128"><span style="color:#666; margin-left:10px;">px</span>
-        </div>
-        <div class="form-row" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 10px;">
-            <label>自定义背景</label>
+        <div class="form-row"><label>站点图标</label><input type="text" id="setting-site-icon" value="${utils.escapeHTML(currentSiteIcon)}"></div>
+        <div class="form-row"><label>站点名称</label><input type="text" id="setting-site-name" value="${utils.escapeHTML(currentSiteName)}"></div>
+        <div class="form-row"><label>自定义背景</label>
             <div style="display:flex; align-items:center; gap:8px; flex:1;">
-                <input type="color" id="setting-bg-color" value="${bgIsColor ? currentBg : '#222222'}" style="width:40px; height:36px; padding:2px; border:none; border-radius:6px; cursor:pointer; background:transparent; flex-shrink:0;">
-                <input type="text" id="setting-bg" value="${utils.escapeHTML(currentBg)}" placeholder="填URL或纯色(如#222), 留空使用Bing" style="flex:1;">
+                <input type="color" id="setting-bg-color" value="${bgIsColor ? currentBg : '#222222'}" style="width:40px; height:36px; cursor:pointer; background:transparent;">
+                <input type="text" id="setting-bg" value="${utils.escapeHTML(currentBg)}" placeholder="填 URL 或纯色，留空用 Bing">
             </div>
         </div>
-        <div class="form-row" style="margin-bottom: 10px;">
-            <label>主题模式</label>
-            <select id="setting-theme" style="flex:1;">${themeOptions}</select>
-        </div>
-        <div class="form-row" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 10px;">
-            <label>简约模式</label>
-            <div style="display:flex; align-items:flex-start; gap:6px; flex:1;">
-                <input type="checkbox" id="setting-simple-mode" ${simpleMode ? 'checked' : ''} style="width:18px; height:18px; cursor:pointer; margin-top:2px;">
-                <span style="font-size:12px; color:#999; line-height:1.4;">关闭模糊效果（提升低端设备性能）</span>
-            </div>
-        </div>
-        <div id="cat-list-sort" style="max-height: 300px; overflow-y: auto;">
-            ${appData.categories.map((c) => `
-                <div class="cat-item-row" data-id="${utils.escapeHTML(c.id)}" style="display:flex; gap:8px; margin-bottom:10px; align-items:center; background:rgba(255,255,255,0.05); padding:8px; border-radius:10px;">
-                    <i class="ri-drag-move-fill drag-handle"></i>
-                    <input class="cat-icon-input" data-id="${utils.escapeHTML(c.id)}" value="${utils.escapeHTML(c.icon)}" style="width:40px; text-align:center; padding:5px">
-                    <input class="cat-name-input" data-id="${utils.escapeHTML(c.id)}" value="${utils.escapeHTML(c.name)}" style="flex:1; padding:5px">
-                    <label style="font-size:11px; color:#999; display:flex; align-items:center; gap:3px; flex-shrink:0; cursor:pointer;">
-                        <input type="checkbox" class="cat-video-toggle" data-id="${utils.escapeHTML(c.id)}" ${c._isVideo ? 'checked' : ''} style="width:14px; height:14px; cursor:pointer;"> 🎬
-                    </label>
-                    <button class="action-mini btn-cat-hide" data-id="${utils.escapeHTML(c.id)}"><i class="ri-eye-${c.hidden ? 'off-' : ''}line"></i></button>
+        <div id="cat-list-sort" style="max-height:260px; overflow-y:auto; margin-top:15px;">
+            ${appData.categories.map(c => `
+                <div class="cat-item-row" data-id="${utils.escapeHTML(c.id)}" style="display:flex; gap:6px; margin-bottom:8px; align-items:center; background:rgba(255,255,255,0.05); padding:6px; border-radius:8px;">
+                    <i class="ri-drag-move-fill drag-handle" style="cursor:move;color:#888"></i>
+                    <input class="cat-icon-input" data-id="${utils.escapeHTML(c.id)}" value="${utils.escapeHTML(c.icon)}" style="width:35px; text-align:center;">
+                    <input class="cat-name-input" data-id="${utils.escapeHTML(c.id)}" value="${utils.escapeHTML(c.name)}" style="flex:1;">
+                    <label style="font-size:12px; display:flex; align-items:center; gap:2px;"><input type="checkbox" class="cat-video-toggle" data-id="${utils.escapeHTML(c.id)}" ${c._isVideo?'checked':''}>🎬</label>
+                    <button class="action-mini btn-cat-hide" data-id="${utils.escapeHTML(c.id)}"><i class="ri-eye-${c.hidden?'off-':''}line"></i></button>
                     <button class="action-mini btn-cat-del" data-id="${utils.escapeHTML(c.id)}"><i class="ri-delete-bin-line"></i></button>
                 </div>
             `).join('')}
         </div>
-        <button class="tab-btn active" id="btn-add-cat" style="width:100%; margin-top:15px">+ 新增分类</button>
+        <button class="tab-btn active" id="btn-add-cat" style="width:100%; margin-top:10px">+ 新增分类</button>
     `;
 
-    document.getElementById('setting-height-default').addEventListener('input', (e) => {
-        if (!appData.settings) appData.settings = {};
-        appData.settings.cardHeightDefault = parseInt(e.target.value) || 85;
-        updateGridWidth();
-    });
-    document.getElementById('setting-height-colorful').addEventListener('input', (e) => {
-        if (!appData.settings) appData.settings = {};
-        appData.settings.cardHeightColorful = parseInt(e.target.value) || 85;
-        updateGridWidth();
-    });
-    document.getElementById('setting-icon-size-default').addEventListener('input', (e) => {
-        if (!appData.settings) appData.settings = {};
-        appData.settings.iconSizeDefault = parseInt(e.target.value) || 32;
-        updateGridWidth();
-    });
-    document.getElementById('setting-icon-size-colorful').addEventListener('input', (e) => {
-        if (!appData.settings) appData.settings = {};
-        appData.settings.iconSizeColorful = parseInt(e.target.value) || 32;
-        updateGridWidth();
-    });
-    document.getElementById('setting-theme').addEventListener('change', (e) => {
-        themeMode = e.target.value;
-        localStorage.setItem('nav_theme_mode', themeMode);
-        applyThemeMode();
-    });
-    document.getElementById('setting-simple-mode').addEventListener('change', (e) => {
-        simpleMode = e.target.checked;
-        localStorage.setItem('nav_simple_mode', simpleMode);
-        document.body.classList.toggle('no-blur', simpleMode);
-    });
-
-    document.getElementById('setting-site-icon').addEventListener('input', (e) => {
-        if (!appData.settings) appData.settings = {};
-        appData.settings.siteIcon = e.target.value || '🌐';
-        updateSidebarHeader();
-    });
-
-    document.getElementById('setting-site-name').addEventListener('input', (e) => {
-        if (!appData.settings) appData.settings = {};
-        appData.settings.siteName = e.target.value || '个人导航';
-        updateSidebarHeader();
-    });
-
+    document.getElementById('setting-site-icon').addEventListener('input', (e) => { if(!appData.settings) appData.settings={}; appData.settings.siteIcon = e.target.value; updateSidebarHeader(); });
+    document.getElementById('setting-site-name').addEventListener('input', (e) => { if(!appData.settings) appData.settings={}; appData.settings.siteName = e.target.value; updateSidebarHeader(); });
+    
     const bgColorPicker = document.getElementById('setting-bg-color');
     const bgTextInput = document.getElementById('setting-bg');
-    bgColorPicker.addEventListener('input', () => {
-        bgTextInput.value = bgColorPicker.value;
-        if (!appData.settings) appData.settings = {};
-        appData.settings.bgUrl = bgColorPicker.value;
-        applyBackgroundConfig();
-    });
-    bgTextInput.addEventListener('input', () => {
-        const val = bgTextInput.value.trim();
-        if (/^#[0-9a-fA-F]{6}$/.test(val)) bgColorPicker.value = val;
-        if (!appData.settings) appData.settings = {};
-        appData.settings.bgUrl = val;
-        applyBackgroundConfig();
-    });
+    bgColorPicker.addEventListener('input', () => { bgTextInput.value = bgColorPicker.value; if(!appData.settings) appData.settings={}; appData.settings.bgUrl = bgColorPicker.value; applyBackgroundConfig(); });
+    bgTextInput.addEventListener('input', () => { if(!appData.settings) appData.settings={}; appData.settings.bgUrl = bgTextInput.value; applyBackgroundConfig(); });
+    
     document.getElementById('btn-add-cat').addEventListener('click', addCat);
 
     const catListSort = document.getElementById('cat-list-sort');
     catListSort.addEventListener('change', (e) => {
-        if (e.target.classList.contains('cat-icon-input')) {
-            updateCatData(e.target.getAttribute('data-id'), 'icon', e.target.value);
-        } else if (e.target.classList.contains('cat-name-input')) {
-            updateCatData(e.target.getAttribute('data-id'), 'name', e.target.value);
-        } else if (e.target.classList.contains('cat-video-toggle')) {
-            updateCatData(e.target.getAttribute('data-id'), '_isVideo', e.target.checked);
-            renderNav();
-        }
+        let cid = e.target.getAttribute('data-id');
+        if (e.target.classList.contains('cat-icon-input')) updateCatData(cid, 'icon', e.target.value);
+        if (e.target.classList.contains('cat-name-input')) updateCatData(cid, 'name', e.target.value);
+        if (e.target.classList.contains('cat-video-toggle')) { updateCatData(cid, '_isVideo', e.target.checked); renderNav(); }
     });
+    
     catListSort.addEventListener('click', (e) => {
-        const hideBtn = e.target.closest('.btn-cat-hide');
-        if (hideBtn) { e.preventDefault(); toggleHide('categories', hideBtn.getAttribute('data-id')); }
-        const delBtn = e.target.closest('.btn-cat-del');
-        if (delBtn) { e.preventDefault(); deleteObj('categories', delBtn.getAttribute('data-id')); }
+        let hideBtn = e.target.closest('.btn-cat-hide'); if (hideBtn) toggleHide('categories', hideBtn.getAttribute('data-id'));
+        let delBtn = e.target.closest('.btn-cat-del'); if (delBtn) deleteObj('categories', delBtn.getAttribute('data-id'));
     });
 
     new Sortable(catListSort, {
-        animation: 150,
-        handle: '.drag-handle',
-        ghostClass: 'sortable-ghost',
+        animation: 150, handle: '.drag-handle', ghostClass: 'sortable-ghost',
         onEnd: () => {
-            const newIdOrder = Array.from(catListSort.querySelectorAll('.cat-item-row')).map(el => el.getAttribute('data-id'));
-            appData.categories = newIdOrder.map(id => appData.categories.find(c => c.id === id));
-            let newGlobalItems = [];
-            appData.categories.forEach(cat => {
-                newGlobalItems.push(...appData.items.filter(i => i.catId === cat.id));
-            });
-            appData.items = newGlobalItems;
-            renderNav();
-            saveAll(true);
+            const newOrder = Array.from(catListSort.querySelectorAll('.cat-item-row')).map(el => el.getAttribute('data-id'));
+            appData.categories = newOrder.map(id => appData.categories.find(c => c.id === id));
+            renderNav(); saveAll(true);
         }
     });
 
+    // 【核心修复】：将确认按钮重定向绑定至偏好分类保存函数
+    const globalConfirmBtn = document.getElementById('btn-confirm-edit');
+    globalConfirmBtn.onclick = null;
+    globalConfirmBtn.onclick = confirmCatSettingsEdit;
+
     document.getElementById('edit-modal').style.display = 'flex';
+};
+
+const confirmCatSettingsEdit = () => {
+    // 偏好设置大弹窗数据收集与云端闭环保存
+    if(!appData.settings) appData.settings = {};
+    appData.settings.siteIcon = document.getElementById('setting-site-icon').value;
+    appData.settings.siteName = document.getElementById('setting-site-name').value;
+    appData.settings.bgUrl = document.getElementById('setting-bg').value;
+    
+    closeModal();
+    renderNav();
+    saveAll(false);
+};
+
+const updateCatData = (id, field, val) => { let cat = appData.categories.find(c => c.id === id); if (cat) cat[field] = val; renderNav(); };
+const addCat = () => { appData.categories.push({ id: 'cat_' + Date.now(), name: '新分类', icon: '📁', hidden: false }); manageCats(); renderNav(); };
+
+const toggleHide = (type, id) => { let obj = appData[type].find(o => o.id === id); if (obj) obj.hidden = !obj.hidden; saveAll(false); renderNav(); if (type==='categories') manageCats(); };
+const deleteObj = (type, id) => { if (confirm('确定删除？')) { appData[type] = appData[type].filter(o => o.id !== id); renderNav(); saveAll(false); if (type==='categories') manageCats(); } };
+const closeModal = () => { document.getElementById('edit-modal').style.display = 'none'; };
+
+const doLogin = async () => {
+    showLoader('安全鉴定中...');
+    const rawPwd = document.getElementById('auth-input').value.trim();
+    sysToken = await hashPassword(rawPwd);
+    localStorage.setItem('nav_token', sysToken);
+    document.getElementById('auth-overlay').style.display = 'none';
+    await init(true); hideLoader();
+};
+
+const doLogout = () => { localStorage.removeItem('nav_token'); sysToken = ''; isAdmin = false; isEditMode = false; init(true); };
+
+const saveAll = async (silent = false) => {
+    if (!silent) showLoader('云端增量同步中...');
+    try {
+        const res = await fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Authorization': sysToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify(appData)
+        });
+        if (!silent) { hideLoader(); showToast("数据同步成功！"); }
+    } catch (e) { if (!silent) { hideLoader(); showToast("同步失败", "#e67e22"); } }
+};
+
+const exportConfig = () => {
+    const blob = new Blob([JSON.stringify(appData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `nav-backup.json`; a.click();
+};
+
+const resetConfig = async () => {
+    if (confirm('确定重置？')) {
+        await fetch('/api/config', { method: 'DELETE', headers: { 'Authorization': sysToken } });
+        init(true);
+    }
 };
 
 const updateSidebarHeader = () => {
     const logo = document.getElementById('sidebar-logo');
     const title = document.getElementById('sidebar-title');
     if (logo && title) {
-        const icon = (appData.settings && appData.settings.siteIcon) || '🌐';
-        const name = (appData.settings && appData.settings.siteName) || '个人导航';
-        logo.textContent = icon;
-        title.textContent = name;
+        logo.textContent = appData.settings?.siteIcon || '🌐';
+        title.textContent = appData.settings?.siteName || '个人导航';
     }
 };
 
-const updateCatData = (id, field, val) => {
-    const cat = appData.categories.find(c => c.id === id);
-    if (cat) cat[field] = val;
-    renderNav();
-};
-
-const addCat = () => {
-    const usedLetters = appData.categories.map(c => c.id.charAt(0).toUpperCase());
-    let nextLetter = 'A';
-    if (usedLetters.length > 0) {
-        const maxCharCode = Math.max(...usedLetters.map(l => l.charCodeAt(0)));
-        nextLetter = String.fromCharCode(maxCharCode + 1);
-    }
-    if (nextLetter > 'Z') nextLetter = 'Z' + Date.now().toString().slice(-2);
-    appData.categories.push({ id: `${nextLetter}01`, name: '新分类', icon: '📁', hidden: false });
-    manageCats();
-    renderNav();
-};
-
-const confirmEdit = () => {
-    if (editingType === 'items') {
-        const url = document.getElementById('f-url').value;
-        const title = document.getElementById('f-title').value;
-        const desc = document.getElementById('f-desc').value;
-        const icon = document.getElementById('f-icon').value;
-        const bgColor = document.getElementById('f-bg-color-text').value.trim();
-        const catId = document.getElementById('f-cat').value;
-
-        if (editingId) {
-            const idx = appData.items.findIndex(i => i.id === editingId);
-            if (idx > -1) {
-                appData.items[idx] = { ...appData.items[idx], url, title, desc, icon, bgColor, catId };
-            }
-        } else {
-            const catLetter = catId.charAt(0).toUpperCase();
-            const siblingItems = appData.items.filter(i => i.catId === catId);
-            let nextNum = 1;
-            if (siblingItems.length > 0) {
-                const ids = siblingItems.map(i => parseInt(i.id.slice(1)) || 0);
-                nextNum = Math.max(...ids) + 1;
-            }
-            const newId = `${catLetter}${String(nextNum).padStart(3, '0')}`;
-            appData.items.push({ id: newId, url, title, desc, icon, bgColor, catId, hidden: false });
-        }
-    }
-    renderNav();
-    closeModal();
-    saveAll(false);
-};
-
-const toggleHide = (type, id) => {
-    const item = appData[type].find(o => o.id === id);
-    if (item) item.hidden = !item.hidden;
-    saveAll(false);
-    renderNav();
-    if (type === 'categories') manageCats();
-};
-
-const deleteObj = (type, id) => {
-    if (confirm('确定删除？')) {
-        const idx = appData[type].findIndex(o => o.id === id);
-        if (idx > -1) appData[type].splice(idx, 1);
-        renderNav();
-        if (type === 'categories') manageCats();
-        saveAll(false);
-    }
-};
-
-// ==================== 认证相关 ====================
-const doLogin = async () => {
-    showLoader('正在验证管理员身份...');
-    const rawPwd = document.getElementById('auth-input').value.trim();
-    if (!rawPwd) { hideLoader(); return showToast("请输入密码", "#e67e22"); }
-
-    sysToken = await hashPassword(rawPwd);
-    localStorage.setItem('nav_token', sysToken);
-    document.getElementById('auth-overlay').style.display = 'none';
-
-    await init(true);
-    hideLoader();
-    if (!isAdmin) {
-        showToast("验证失败，密码不正确", "#e74c3c");
-        localStorage.removeItem('nav_token');
-        sysToken = '';
-    } else {
-        showToast("已进入管理模式");
-        document.getElementById('auth-input').value = '';
-    }
-};
-
-const doLogout = async () => {
-    showLoader('正在退出管理模式...');
-    await new Promise(r => setTimeout(r, 600));
-    localStorage.removeItem('nav_token');
-    sysToken = '';
-    isAdmin = false;
-    appData.isAdmin = false;
-    localStorage.setItem('nav_app_data', JSON.stringify(appData));
-
-    hideLoader();
-    showToast("已退出管理模式", "#399dff");
-    init(true);
-};
-
-// ==================== 数据操作 ====================
-const saveAll = async (silent = false) => {
-    if (!silent) showLoader('正在同步配置中...');
-
-    const dataToSave = { ...appData };
-    delete dataToSave.isAdmin;
-    delete dataToSave.bgUrl;
-    localStorage.setItem('nav_app_data', JSON.stringify(appData));
-
-    try {
-        const res = await fetch('/api/config', {
-            method: 'POST',
-            headers: { 'Authorization': sysToken, 'Content-Type': 'application/json' },
-            body: JSON.stringify(dataToSave)
-        });
-        if (!silent) hideLoader();
-        if (res.ok && !silent) { showToast("保存成功！"); }
-        else if (!res.ok && !silent) { showToast("保存失败，权限不足", "#e74c3c"); }
-    } catch (error) {
-        if (!silent) { hideLoader(); showToast("网络错误，配置仅保存在本地", "#e67e22"); }
-    }
-};
-
-const importConfig = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-        try {
-            const imported = JSON.parse(e.target.result);
-            if (imported.categories && imported.items) {
-                appData = imported;
-                renderTools();
-                renderNav();
-                await saveAll(false);
-                showToast("配置导入成功！");
-            } else {
-                showToast("无效的配置文件格式", "#e74c3c");
-            }
-        } catch (err) {
-            showToast("文件解析失败", "#e74c3c");
-        }
-    };
-    reader.readAsText(file);
-    event.target.value = '';
-};
-
-const exportConfig = () => {
-    let sortedItems = [];
-    appData.categories.forEach(cat => {
-        sortedItems.push(...appData.items.filter(i => i.catId === cat.id));
-    });
-    const dataToExport = { settings: appData.settings, categories: appData.categories, items: sortedItems };
-    let jsonStr = JSON.stringify(dataToExport, null, 2);
-    jsonStr = jsonStr.replace(/\{[\s\S]*?\}/g, (match) => match.replace(/\n\s+/g, ' '));
-
-    const blob = new Blob([jsonStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    a.href = url;
-    a.download = `nav-backup-${dateStr}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast("配置已按紧凑格式导出");
-};
-
-const resetConfig = async () => {
-    if (!confirm('确定恢复默认配置？此操作不可撤销。')) return;
-    showLoader('正在重置...');
-    try {
-        const res = await fetch('/api/config', {
-            method: 'DELETE',
-            headers: { 'Authorization': sysToken }
-        });
-        hideLoader();
-        if (res.ok) {
-            localStorage.removeItem('nav_app_data');
-            showToast("已重置为默认配置");
-            init(true);
-        } else {
-            showToast("重置失败，权限不足", "#e74c3c");
-        }
-    } catch (e) {
-        hideLoader();
-        showToast("网络错误", "#e74c3c");
-    }
-};
-
-const closeModal = () => {
-    document.getElementById('edit-modal').style.display = 'none';
-};
-
-// ==================== 事件绑定 ====================
+// ==================== 全局底层事件绑定 ====================
 document.getElementById('btn-login').addEventListener('click', doLogin);
 document.getElementById('auth-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
 document.getElementById('btn-close-auth').addEventListener('click', () => { document.getElementById('auth-overlay').style.display = 'none'; });
-document.getElementById('btn-confirm-edit').addEventListener('click', confirmEdit);
 document.getElementById('btn-close-edit').addEventListener('click', closeModal);
 document.getElementById('import-file').addEventListener('change', importConfig);
-
 ```
 
 
