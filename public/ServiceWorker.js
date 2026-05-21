@@ -2,13 +2,12 @@
  * ==========================================
  * ServiceWorker.js - PWA 核心脚本
  * 实现 Stale-While-Revalidate 缓存策略
+ * 升级版：深度排除后端动态API，防止静态缓存拦截更新
  * ==========================================
  */
 
-// 缓存版本号（更新时需修改）
-const CACHE_NAME = 'nav-cache-v7';
+const CACHE_NAME = 'nav-cache-v8'; // 升级版本号强制触发静态文件刷洗
 
-// 需要缓存的核心静态资源
 const URLS_TO_CACHE = [
   '/',
   '/index.html',
@@ -21,29 +20,19 @@ const URLS_TO_CACHE = [
   'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js'
 ];
 
-/**
- * 安装事件
- * @description 缓存核心静态资源，跳过等待直接激活
- *               单个资源失败不影响其他资源的缓存
- */
 self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      // 逐个缓存，单个失败不影响整体（比 cache.addAll 更健壮）
       return Promise.allSettled(
         URLS_TO_CACHE.map(url =>
-          cache.add(url).catch(err => console.warn('SW 缓存失败:', url, err.message))
+          cache.add(url).catch(err => console.warn('SW 缓存静态资源失败:', url, err.message))
         )
       );
     })
   );
 });
 
-/**
- * 激活事件
- * @description 清理旧版本缓存，确保只保留当前版本
- */
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(cacheNames => {
@@ -58,15 +47,11 @@ self.addEventListener('activate', event => {
   );
 });
 
-/**
- * 请求拦截事件
- */
 self.addEventListener('fetch', event => {
-  // API 请求不走 SW 缓存
+  // 核心安全屏障：凡是包含 /api/ 的后端请求，直接不碰不拦截，交给原生网络，防止覆盖云端新改动
   if (event.request.url.includes('/api/')) return;
 
-  // 1. 对于 HTML 页面请求，优先使用缓存，后台更新（Stale-While-Revalidate）
-  //    避免每次导航都等待网络，提升首屏加载速度
+  // 1. HTML 页面请求流
   const acceptHeader = event.request.headers.get('accept') || '';
   if (event.request.mode === 'navigate' || acceptHeader.includes('text/html')) {
     event.respondWith(
@@ -83,7 +68,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 2. 其他静态资源 (CSS/JS/图片) 保持 Stale-While-Revalidate (缓存优先并后台更新)
+  // 2. 静态小组件与样式资源 (CSS/JS/图片)
   event.respondWith(
     caches.match(event.request).then(cachedResponse => {
       const fetchPromise = fetch(event.request).then(networkResponse => {
