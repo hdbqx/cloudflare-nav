@@ -1,7 +1,7 @@
 ﻿/**
  * ==========================================
- * app.js - 核心前端逻辑（全功能无损整合版）
- * 包含：Edge 增量导入、独立编辑面板、智能图标获取与偏好控制
+ * app.js - 核心前端逻辑（全功能无损无错版）
+ * 包含：Edge 增量导入、独立编辑面板、智能图标获取与全功能修复
  * ==========================================
  */
 
@@ -112,7 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const newWorker = reg.installing;
                         newWorker.addEventListener('statechange', () => {
                             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                showToast("发现静态视图有更新，请手动刷新页面应用", "#3498db");
+                                showToast("系统更新就绪，请手动刷新刷新页面更新UI", "#3498db");
                             }
                         });
                     });
@@ -368,7 +368,6 @@ const applyBackgroundConfig = () => {
 
 const init = async (forceRender = false) => {
     let fetchUrl = `/api/config?_t=${Date.now()}`;
-    const gridContainer = document.getElementById('grid-container');
     const localCache = localStorage.getItem('nav_app_data');
     let initialIsAdmin = isAdmin;
 
@@ -451,7 +450,7 @@ const renderTools = () => {
 
     if (isAdmin) {
         document.title = "管理后台";
-        // 显式编辑面板控制开关
+        // 独立显式编辑面板控制开关
         createSidebarBtn(isEditMode ? 'ri-lock-unlock-line' : 'ri-lock-line', isEditMode ? '关闭编辑面板' : '开启编辑面板', () => {
             isEditMode = !isEditMode;
             renderTools();
@@ -583,7 +582,7 @@ const showBatchMoveDialog = () => {
     });
 };
 
-// ==================== 核心渲染函数 ====================
+// ==================== 核心网格渲染函数 ====================
 const renderNav = () => {
     const sidebarNav = document.getElementById('sidebar-nav');
     const container = document.getElementById('grid-container');
@@ -624,11 +623,25 @@ const renderNav = () => {
         if (catIsVideo) {
             const videoGrid = document.createElement('div');
             videoGrid.className = 'video-grid';
+            
+            // 绑定视频区块的管理事件点击拦截
+            videoGrid.addEventListener('click', (e) => {
+                const actionBtn = e.target.closest('.action-mini');
+                if (actionBtn) {
+                    e.preventDefault(); e.stopPropagation();
+                    const action = actionBtn.getAttribute('data-action');
+                    const targetId = actionBtn.getAttribute('data-id');
+                    if (action === 'toggleHide') toggleHide('items', targetId);
+                    if (action === 'edit') openItemEdit(targetId, null);
+                    if (action === 'delete') deleteObj('items', targetId);
+                }
+            });
+
             catItems.forEach(item => { videoGrid.appendChild(buildVideoCard(item, detectVideoPlatform(item.url))); });
 
             if (isAdmin && isEditMode && cat.id !== 'VIRTUAL_FREQ') {
                 const addCard = document.createElement('div');
-                addCard.className = 'video-card'; addCard.style.cssText = 'border-style:dashed;display:flex;align-items:center;justify-content:center;min-height:120px;';
+                addCard.className = 'video-card'; addCard.style.cssText = 'border-style:dashed;display:flex;align-items:center;justify-content:center;min-height:120px;cursor:pointer;';
                 addCard.innerHTML = `<div style="text-align:center;color:rgba(255,255,255,0.5);"><i class="ri-add-line" style="font-size:32px;"></i><div>新增</div></div>`;
                 addCard.addEventListener('click', () => openItemEdit('', cat.id));
                 videoGrid.appendChild(addCard);
@@ -647,6 +660,9 @@ const renderNav = () => {
                     if (action === 'toggleHide') toggleHide('items', targetId);
                     if (action === 'edit') openItemEdit(targetId, null);
                     if (action === 'delete') deleteObj('items', targetId);
+                } else if (e.target.closest('.batch-select-btn')) {
+                    e.preventDefault(); e.stopPropagation();
+                    toggleCardSelection(e.target.closest('.batch-select-btn').getAttribute('data-id'));
                 }
             });
 
@@ -843,7 +859,7 @@ function parseEdgeHtmlBookmarks(htmlStr) {
     return { categories, items };
 }
 
-// ==================== 完整原版：新增/编辑网站弹窗渲染 ====================
+// ==================== 新增/编辑网站弹窗渲染 ====================
 const debouncedHandleUrlInput = utils.debounce((val) => handleUrlInput(val), 500);
 
 const openItemEdit = (id, catId) => {
@@ -865,6 +881,8 @@ const openItemEdit = (id, catId) => {
     const videoInfo = detectVideoPlatform(item.url);
 
     document.getElementById('edit-title').innerText = id ? '编辑网站' : '新增网站';
+    
+    // 【修改绑定】：移除原本重名的 btn-confirm-edit 监听错乱，确保由独立的 confirmEdit 函数执行
     document.getElementById('edit-form-body').innerHTML = `
         <div class="form-row"><label>网站 URL</label><input id="f-url" value="${safeUrl}"></div>
         ${isVideoCat || videoInfo ? `<div style="background:rgba(57,157,255,0.1); border:1px solid rgba(57,157,255,0.3); border-radius:8px; padding:8px 12px; margin-bottom:8px; font-size:12px; color:rgba(255,255,255,0.8);">
@@ -922,6 +940,12 @@ const openItemEdit = (id, catId) => {
 
     updatePreview(item.icon);
     if (item.url) handleUrlInput(item.url, false);
+    
+    // 【核心修复】：显式重绑提交动作到全局统一的保存动作
+    const globalConfirmBtn = document.getElementById('btn-confirm-edit');
+    globalConfirmBtn.onclick = null; 
+    globalConfirmBtn.onclick = confirmEdit; 
+
     document.getElementById('edit-modal').style.display = 'flex';
 };
 
@@ -952,6 +976,7 @@ const handleUrlInput = (url, autoSelect = true) => {
 
 const updatePreview = (val) => {
     const box = document.getElementById('preview-box');
+    if (!box) return;
     if (!val) { box.innerHTML = '🔗'; return; }
     if (val.startsWith('http')) {
         box.innerHTML = `<img src="${utils.escapeHTML(val)}" onerror="this.outerHTML='<span class=\\'emoji-icon\\'>🌐</span>';">`;
@@ -961,12 +986,23 @@ const updatePreview = (val) => {
 };
 
 const confirmEdit = () => {
-    const url = document.getElementById('f-url').value;
-    const title = document.getElementById('f-title').value;
-    const desc = document.getElementById('f-desc').value;
-    const icon = document.getElementById('f-icon').value;
+    if (editingType === 'cats') {
+        // 如果是在偏好设置分类下，拦截跳转
+        confirmCatSettingsEdit();
+        return;
+    }
+
+    const url = document.getElementById('f-url').value.trim();
+    const title = document.getElementById('f-title').value.trim();
+    const desc = document.getElementById('f-desc').value.trim();
+    const icon = document.getElementById('f-icon').value.trim();
     const catId = document.getElementById('f-cat').value;
     const bgColor = document.getElementById('f-bg-color-text') ? document.getElementById('f-bg-color-text').value.trim() : '';
+
+    if (!url || !title) {
+        showToast('链接和名称不能为空', '#e67e22');
+        return;
+    }
 
     if (editingId) {
         const idx = appData.items.findIndex(i => i.id === editingId);
@@ -974,10 +1010,13 @@ const confirmEdit = () => {
     } else {
         appData.items.push({ id: 'i' + Date.now(), url, title, desc, icon, bgColor, catId, hidden: false });
     }
-    renderNav(); closeModal(); saveAll(false);
+    
+    closeModal();
+    renderNav();
+    saveAll(false); // 触发向 Cloudflare 后端进行增量智能合并保存
 };
 
-// ==================== 完整原版：偏好与分类拖拽管理 ====================
+// ==================== 偏好与分类拖拽管理 ====================
 const manageCats = () => {
     editingType = 'cats';
     document.getElementById('edit-title').innerText = '偏好与分类设置';
@@ -1043,7 +1082,24 @@ const manageCats = () => {
         }
     });
 
+    // 【核心修复】：将确认按钮重定向绑定至偏好分类保存函数
+    const globalConfirmBtn = document.getElementById('btn-confirm-edit');
+    globalConfirmBtn.onclick = null;
+    globalConfirmBtn.onclick = confirmCatSettingsEdit;
+
     document.getElementById('edit-modal').style.display = 'flex';
+};
+
+const confirmCatSettingsEdit = () => {
+    // 偏好设置大弹窗数据收集与云端闭环保存
+    if(!appData.settings) appData.settings = {};
+    appData.settings.siteIcon = document.getElementById('setting-site-icon').value;
+    appData.settings.siteName = document.getElementById('setting-site-name').value;
+    appData.settings.bgUrl = document.getElementById('setting-bg').value;
+    
+    closeModal();
+    renderNav();
+    saveAll(false);
 };
 
 const updateCatData = (id, field, val) => { let cat = appData.categories.find(c => c.id === id); if (cat) cat[field] = val; renderNav(); };
@@ -1098,9 +1154,9 @@ const updateSidebarHeader = () => {
     }
 };
 
+// ==================== 全局底层事件绑定 ====================
 document.getElementById('btn-login').addEventListener('click', doLogin);
 document.getElementById('auth-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
 document.getElementById('btn-close-auth').addEventListener('click', () => { document.getElementById('auth-overlay').style.display = 'none'; });
-document.getElementById('btn-confirm-edit').addEventListener('click', confirmEdit);
 document.getElementById('btn-close-edit').addEventListener('click', closeModal);
 document.getElementById('import-file').addEventListener('change', importConfig);
