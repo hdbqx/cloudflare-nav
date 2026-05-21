@@ -5,49 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>个人网站导航</title>
     
-    <!-- DNS 预解析与预连接 -->
     <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     
-    <!-- RemixIcon 图标字体（异步加载，不阻塞 load 事件）
-         先用 media="print" 让浏览器异步下载，下载完成后切换为 screen -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" media="print" onload="this.media='all'">
     <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css"></noscript>
     
-    <!-- Favicon（内联 SVG，零网络请求） -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌐</text></svg>">
     <link rel="shortcut icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌐</text></svg>">
     
-    <!-- PWA 配置 -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#111111">
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌐</text></svg>">
     
-    <!-- 拖拽排序库 -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js" defer></script>
     
-    <!-- 样式文件 -->
     <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
-    <!-- Toast 提示 -->
     <div id="toast">操作成功</div>
     
-    <!-- 全局加载遮罩 -->
     <div id="global-loading-overlay" class="modal" style="z-index: 9999;">
         <div class="global-spinner"></div>
         <div id="global-loading-text" style="color: #fff; font-size: 15px; font-weight: bold; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">正在处理中...</div>
     </div>
 
-    <!-- 移动端汉堡菜单按钮 -->
     <button id="sidebar-toggle" class="sidebar-toggle" aria-label="打开导航菜单">
         <i class="ri-menu-line"></i>
     </button>
-    <!-- 移动端遮罩 -->
     <div id="sidebar-overlay" class="sidebar-overlay"></div>
 
     <div class="app-layout">
-        <!-- 左侧导航栏 -->
         <aside id="sidebar" class="sidebar">
             <div class="sidebar-header">
                 <span class="sidebar-logo" id="sidebar-logo">🌐</span>
@@ -67,9 +55,7 @@
             </div>
         </aside>
 
-        <!-- 主内容区域 -->
         <main class="main-content">
-            <!-- 骨架屏（加载占位） -->
             <div id="skeleton-screen">
                 <div class="skel-tabs">
                     <div class="skel-tab skel-anim"></div>
@@ -86,20 +72,16 @@
                 </div>
             </div>
 
-            <!-- 导航内容 -->
             <div id="main-content" style="display: none;">
                 <div id="grid-container" class="grid-container"></div>
             </div>
         </main>
     </div>
     
-    <!-- 页脚缓存信息 -->
     <div id="footer-cache" class="footer-info"></div>
     
-    <!-- 隐藏的文件输入框（用于导入配置） -->
-    <input type="file" id="import-file" accept=".json" style="display:none">
+    <input type="file" id="import-file" accept=".json,.html" style="display:none">
 
-    <!-- 登录验证弹窗 -->
     <div id="auth-overlay" class="modal">
         <div class="modal-content" style="text-align:center">
             <button id="btn-close-auth" style="position:absolute; top:15px; right:15px; background:none; border:none; color:#777; cursor:pointer; font-size:24px">×</button>
@@ -109,7 +91,6 @@
         </div>
     </div>
 
-    <!-- 编辑弹窗 -->
     <div id="edit-modal" class="modal">
         <div class="modal-content">
             <button id="btn-close-edit" style="position:absolute; top:15px; right:15px; background:none; border:none; color:#777; cursor:pointer; font-size:24px">×</button>
@@ -119,7 +100,6 @@
         </div>
     </div>
 
-    <!-- 视频播放弹窗 -->
     <div id="video-modal" class="modal">
         <div class="video-modal-content">
             <button id="btn-close-video" class="video-close-btn"><i class="ri-close-line"></i></button>
@@ -136,7 +116,6 @@
         </div>
     </div>
 
-    <!-- Monaco Editor 弹窗 -->
     <div id="monaco-modal" class="modal">
         <div class="monaco-modal-content">
             <div class="monaco-header">
@@ -151,7 +130,6 @@
         </div>
     </div>
 
-    <!-- JavaScript 文件 -->
     <script src="/assets/js/utils.js"></script>
     <script src="/assets/js/colorExtractor.js"></script>
     <script src="/assets/js/app.js"></script>

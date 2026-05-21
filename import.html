@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CloudNav 收藏夹转换器 (2026版)</title>
+    <style>
+        body {
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background-color: #f5f7fa;
+            color: #2c3e50;
+            padding: 40px 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+        h2 { text-align: center; color: #3498db; margin-bottom: 30px; }
+        .upload-box {
+            border: 2px dashed #3498db;
+            padding: 40px 20px;
+            text-align: center;
+            border-radius: 8px;
+            background: #fcfdfe;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .upload-box:hover { background: #f4f9fd; }
+        input[type="file"] { display: none; }
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            background: #2ecc71;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 20px;
+            display: none;
+        }
+        .btn:hover { background: #27ae60; }
+        #status { margin-top: 15px; text-align: center; font-weight: bold; }
+        textarea {
+            width: 100%;
+            height: 300px;
+            margin-top: 20px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            padding: 10px;
+            font-family: monospace;
+            box-sizing: border-box;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🧭 CloudNav 收藏夹转换工具</h2>
+    
+    <div class="upload-box" id="drop-zone" onclick="document.getElementById('file-input').click()">
+        <p id="upload-text">📁 点击这里选择，或将 Edge 导出的 HTML 收藏夹拖放到这里</p>
+        <input type="file" id="file-input" accept=".html">
+    </div>
+
+    <div id="status"></div>
+    <button class="btn" id="download-btn">📥 下载 CloudNav 备份 JSON</button>
+    
+    <textarea id="output-json" readonly placeholder="转换后的 JSON 将显示在这里..."></textarea>
+</div>
+
+<script>
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+const statusDiv = document.getElementById('status');
+const downloadBtn = document.getElementById('download-btn');
+const outputTextarea = document.getElementById('output-json');
+
+let finalResultJson = null;
+
+// 处理文件选择
+fileInput.addEventListener('change', handleFile);
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = '#2ecc71'; });
+dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = '#3498db'; });
+dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.style.borderColor = '#3498db'; handleFile({ target: { files: e.dataTransfer.files } }); });
+
+function handleFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    statusDiv.style.color = '#34495e';
+    statusDiv.innerText = '正在解析收藏夹...';
+
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        try {
+            const htmlContent = event.target.result;
+            const parsedData = parseBookmarkHtml(htmlContent);
+            
+            finalResultJson = {
+                settings: { cardWidth: 90, cardHeightDefault: 85, cardHeightColorful: 85 },
+                categories: parsedData.categories,
+                items: parsedData.items
+            };
+
+            statusDiv.style.color = '#2ecc71';
+            statusDiv.innerText = `🎉 转换成功！共解析出 ${parsedData.categories.length} 个分类，${parsedData.items.length} 个书签。`;
+            
+            outputTextarea.value = JSON.stringify(finalResultJson, null, 2);
+            outputTextarea.style.display = 'block';
+            downloadBtn.style.display = 'block';
+        } catch (err) {
+            statusDiv.style.color = '#e74c3c';
+            statusDiv.innerText = '❌ 解析失败，请确保上传的是标准 Edge/Chrome 导出的 HTML 收藏夹。';
+            console.error(err);
+        }
+    };
+    reader.readAsText(file, "UTF-8");
+}
+
+// 核心 HTML 解析算法（支持多级目录扁平化）
+function parseBookmarkHtml(htmlStr) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlStr, 'text/html');
+    
+    const categories = [];
+    const items = [];
+    
+    // 生成分类 ID (A01, B01, C01...)
+    function generateCatId(index) {
+        const letter = String.fromCharCode(65 + (index % 26)); // A-Z
+        const num = String(Math.floor(index / 26) + 1).padStart(2, '0');
+        return `${letter}${num}`;
+    }
+
+    // 生成书签 ID (A001, A002...)
+    function generateItemId(catId, index) {
+        const letter = catId.charAt(0);
+        return `${letter}${String(index + 1).padStart(3, '0')}`;
+    }
+
+    // 智能提取 Emoji 图标
+    function getCategoryIcon(name) {
+        const emojiMap = {
+            '云端': '☁️', '公益': '🎁', '靶场': '🎯', '域名': '🌐', '社交': '💬', '视频': '🎬', '新闻': '📰', '人工智能': '🤖', 'AI': '🤖'
+        };
+        for (let key in emojiMap) {
+            if (name.includes(key)) return emojiMap[key];
+        }
+        return '📁'; // 默认图标
+    }
+
+    // 找到顶层的第一个 <DL>
+    const firstDl = doc.querySelector('dl');
+    if (!firstDl) return { categories, items };
+
+    let catIndex = 0;
+
+    // 遍历外层 DT，寻找文件夹
+    const topDts = firstDl.querySelectorAll(':scope > dt');
+    
+    // 如果没有获取到顶层（某些导出格式包裹比较深），查找所有带虚拟文件夹的 H3
+    const folderHeaders = doc.querySelectorAll('dt > h3');
+    
+    folderHeaders.forEach((h3) => {
+        const folderName = h3.textContent.trim();
+        
+        // 过滤掉“收藏夹栏”等无意义的根目录名，只提取子文件夹
+        if (folderName === '收藏夹栏' || folderName === 'Bookmarks' || folderName === '书签栏') {
+            return;
+        }
+
+        const catId = generateCatId(catIndex);
+        const icon = getCategoryIcon(folderName);
+        
+        // 1. 添加分类
+        categories.push({
+            id: catId,
+            name: folderName,
+            icon: icon,
+            hidden: false,
+            _isVideo: folderName.includes('视频') || folderName.includes('影视')
+        });
+
+        // 2. 寻找当前文件夹（H3元素）紧跟的下一个 <DL> 列表里的所有超链接
+        const nextDl = h3.parentElement.querySelector('dl');
+        if (nextDl) {
+            const links = nextDl.querySelectorAll('a');
+            links.forEach((a, itemIndex) => {
+                const title = a.textContent.trim();
+                const url = a.getAttribute('href');
+                let iconUrl = a.getAttribute('icon') || '';
+                
+                // 优化：CloudNav 自带 favicon 抓取，如果导出的 base64 图标太长，可以留空让其自动抓取，或保持原样
+                if (iconUrl.startsWith('data:image')) {
+                    // 如果你想使用默认智能图标服务，可以注释掉下面这行。保留此行会使用原收藏夹图标
+                    iconUrl = "https://favicon.im/" + new URL(url).hostname;
+                }
+
+                items.push({
+                    id: generateItemId(catId, itemIndex),
+                    catId: catId,
+                    title: title,
+                    url: url,
+                    desc: title,
+                    icon: iconUrl || ('https://favicon.im/' + new URL(url).hostname),
+                    hidden: false
+                });
+            });
+        }
+        catIndex++;
+    });
+
+    return { categories, items };
+}
+
+// 下载 JSON 功能
+downloadBtn.addEventListener('click', () => {
+    if (!finalResultJson) return;
+    const jsonStr = JSON.stringify(finalResultJson, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `cloudnav-imported-${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>

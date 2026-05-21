@@ -3,6 +3,7 @@
  * config.js - 后端 Serverless API 处理
  * 路由: /api/config
  * 基于 Cloudflare Pages Functions + Workers KV
+ * 升级版：支持增量智能合并 (POST)
  * ==========================================
  */
 
@@ -22,7 +23,6 @@ const getFreshDefaultData = () => ({
   lastUpdated: formatCNTime(new Date())
 });
 
-// ====== 新增：后端 SHA-256 哈希计算函数 ======
 async function sha256(text) {
   const msgBuffer = new TextEncoder().encode(text);
   const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
@@ -46,13 +46,7 @@ export async function onRequest(context) {
   };
 
   try {
-    // ==========================================
-    // 核心安全优化：动态识别明文与哈希
-    // ==========================================
     let expectedToken = env.TOKEN || "";
-    // SHA-256 哈希值的固定长度是 64。
-    // 如果长度不是 64，说明你在 Cloudflare 后台填的是“明文密码”。
-    // 我们就在后端内部安全地将其转为哈希值，用来与前端发来的哈希值比对。
     if (expectedToken.length !== 64) {
       expectedToken = await sha256(expectedToken);
     }
@@ -68,15 +62,51 @@ export async function onRequest(context) {
       return new Response(JSON.stringify({ success: true, message: "已重置为默认配置" }), { headers });
     }
 
-    // 2. 处理保存数据 (POST)
+    // 2. 处理保存数据 (POST) - 智能增量合并架构
     if (request.method === "POST") {
       const auth = request.headers.get("Authorization");
       if (auth !== expectedToken) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
       }
-      const newData = await request.json();
-      newData.lastUpdated = formatCNTime(new Date());
-      await env.nav.put("config", JSON.stringify(newData));
+      
+      const incomingData = await request.json();
+      
+      // 读取现有老配置
+      let currentDataStr = await env.nav.get("config");
+      let currentData = currentDataStr ? JSON.parse(currentDataStr) : { settings: {}, categories: [], items: [] };
+
+      // 1. 合并 settings
+      currentData.settings = { ...currentData.settings, ...incomingData.settings };
+
+      // 2. 增量合并 categories
+      if (incomingData.categories && Array.isArray(incomingData.categories)) {
+        incomingData.categories.forEach(inCat => {
+          const existCat = currentData.categories.find(c => c.id === inCat.id || c.name === inCat.name);
+          if (!existCat) {
+            currentData.categories.push(inCat);
+          } else {
+            existCat.icon = inCat.icon || existCat.icon;
+            if (inCat._isVideo !== undefined) existCat._isVideo = inCat._isVideo;
+          }
+        });
+      }
+
+      // 3. 增量合并 items (按 URL 查重)
+      if (incomingData.items && Array.isArray(incomingData.items)) {
+        incomingData.items.forEach(inItem => {
+          const existItem = currentData.items.find(i => i.url === inItem.url);
+          if (!existItem) {
+            currentData.items.push(inItem);
+          } else {
+            existItem.title = inItem.title || existItem.title;
+            existItem.desc = inItem.desc || existItem.desc;
+            existItem.icon = inItem.icon || existItem.icon;
+          }
+        });
+      }
+
+      currentData.lastUpdated = formatCNTime(new Date());
+      await env.nav.put("config", JSON.stringify(currentData));
       return new Response(JSON.stringify({ success: true }), { headers });
     }
 
@@ -87,7 +117,6 @@ export async function onRequest(context) {
 
       const url = new URL(request.url);
       const auth = request.headers.get("Authorization") || url.searchParams.get("token");
-      // 使用转换后的哈希值进行验证
       const isAdmin = (auth === expectedToken);
 
       if (!isAdmin) {
