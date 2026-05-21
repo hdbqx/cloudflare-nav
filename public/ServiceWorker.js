@@ -1,12 +1,11 @@
 /**
  * ==========================================
  * ServiceWorker.js - PWA 核心脚本
- * 实现 Stale-While-Revalidate 缓存策略
- * 升级版：深度排除后端动态API，防止静态缓存拦截更新
+ * 标准放行版：彻底修复 POST/DELETE 请求无法穿透到云端数据库的问题
  * ==========================================
  */
 
-const CACHE_NAME = 'nav-cache-v8'; // 升级版本号强制触发静态文件刷洗
+const CACHE_NAME = 'nav-cache-v10'; // 升级版本号，强行刷新之前的错误静态缓存
 
 const URLS_TO_CACHE = [
   '/',
@@ -20,6 +19,7 @@ const URLS_TO_CACHE = [
   'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js'
 ];
 
+// 安装时缓存静态资源
 self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
@@ -33,6 +33,7 @@ self.addEventListener('install', event => {
   );
 });
 
+// 激活时清理旧缓存
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(cacheNames => {
@@ -47,11 +48,16 @@ self.addEventListener('activate', event => {
   );
 });
 
+// 核心网络请求拦截器
 self.addEventListener('fetch', event => {
-  // 核心安全屏障：凡是包含 /api/ 的后端请求，直接不碰不拦截，交给原生网络，防止覆盖云端新改动
-  if (event.request.url.includes('/api/')) return;
+  // 【核心修复】：如果请求包含 /api/，这是后端的动态接口（包含你的 GET 刷新、POST 保存、DELETE 重置）
+  // 必须使用 event.respondWith(fetch(event.request)) 顺畅地把它放行到真实的网络和 Cloudflare 数据库上！
+  if (event.request.url.includes('/api/')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
 
-  // 1. HTML 页面请求流
+  // 1. 静态 HTML 页面请求流（采用 Stale-While-Revalidate 策略，后台更新）
   const acceptHeader = event.request.headers.get('accept') || '';
   if (event.request.mode === 'navigate' || acceptHeader.includes('text/html')) {
     event.respondWith(
@@ -68,7 +74,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 2. 静态小组件与样式资源 (CSS/JS/图片)
+  // 2. 其余静态资源 (CSS/JS/字体等)
   event.respondWith(
     caches.match(event.request).then(cachedResponse => {
       const fetchPromise = fetch(event.request).then(networkResponse => {
